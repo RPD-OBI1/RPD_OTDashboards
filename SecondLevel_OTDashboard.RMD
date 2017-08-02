@@ -1,0 +1,609 @@
+---
+title: "Overtime Dashboard for `r params$LevelTwoName`, as of `r format(Sys.Date() - 3, '%Y/%m/%d')`"
+output: 
+  flexdashboard::flex_dashboard:
+    logo: Y:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
+    orientation: columns
+    vertical_layout: fill
+    theme: paper
+params:
+    LevelTwoName:
+        label: "CostCenter2ndLevel"
+        value: "SIS"
+    StartDate:
+        value: !r as.Date("2016-07-01")
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(plotly)
+library(tidyverse)
+library(scales)
+library(DT)
+library(lubridate)
+library(reshape2)
+library(forcats)
+library(RColorBrewer)
+
+otpath <- "Y:/Projects/dashboard/RPDOvertimeDashboard/"
+fromdate <- params$StartDate
+todate <- Sys.Date()
+
+# 2017 pay periods, done manually
+days = seq.Date(from = fromdate, to = todate, by = "days") %>%
+    as.data.frame()
+payperiod2017lookup <- data.frame(
+    PayPeriod = c(rep(1, 9), rep(2:100, each = 14))) %>% # Because pay period #1 ended on July 9th 2017
+    #"["(., 1:nrow(days),) %>% # filtering by row number - "["() is the function
+    mutate(PayPeriod = as.integer(PayPeriod)) %>%
+    filter(row_number(.) %in% 1:nrow(days)) %>%
+    bind_cols(days) %>%
+    # mutate(PayPeriod = as.factor(PayPeriod)) %>%
+    rename_(Date = names(.)[2]) # simple rename() doesn't work. renaming 2nd column by index.
+
+payperiod2017range <- payperiod2017lookup %>%
+    group_by(PayPeriod) %>%
+    summarise(firstdate = min(Date),
+              lastdate = max(Date)) %>%
+    ungroup()
+
+payperiod2017lookup <- payperiod2017lookup %>%
+    left_join(payperiod2017range, by = "PayPeriod")
+rm(payperiod2017range, days)
+
+activitylookup <- data.frame(
+    ActivityAbrv = LETTERS[c(1:8, 10:24)],
+    ActivityFull = c("CityCourt", "CountyCourtOrGJ", "FamilyCourt", "OtherCourt", "MeetingWithDA", "TVB", "TVBSTOPDWI", "PSSAppearance",
+                     "CompletingAssignment", "CallBack", "SchoolCrossing", "CommunityMeeting", 
+                     "SpecialEvent", "Project", "PersonnelShortage", "AdminMeeting", "TrainingRecd", "TrainingInstorDevelop",
+                     "CivilianHoliday", "FTO", "FTOMeeting", "EvidenceTransfer", "Grant"),
+    ActivityGrouping = c("Court", "Court", "Court", "Court", "Court", "Court", "Court", "Other", 
+                         "CompletingAssignment", "CallBack", "Other", "CommunityMeeting",
+                         "Other", "Project", "PersonnelShortage", "Other", "Other", "Other",
+                         "Other", "Other", "Other", "Other", "Other"),
+    stringsAsFactors = FALSE
+)
+
+# Read in data
+
+CostCentersSelected <- read_csv("Y:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
+    select(CostCenter = `Overtime Allotments`,
+           Allotment = `FY18 Budget`,
+           LevelTwo = `2nd Level`,
+           LevelThree = `3rd Level`,
+           LevelFour = `4th Level`) %>%
+    filter(LevelTwo == params$LevelTwoName) %>%
+    mutate(Allotment = gsub(Allotment, pattern = ",", replacement = "") %>%
+               as.numeric()) %>%
+    select(CostCenter, Allotment)
+
+otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
+    rename(CostCenter = `Cost Center`,
+           PayPeriodListed = Period,
+           OvertimeHours = `Overtime Hours`) %>%
+    mutate(OvertimeAmount = substr(`Overtime Amount`, start = 2, stop = 99) %>%
+               gsub(pattern = ",", replacement = "") %>%
+               as.numeric(),
+           OvertimeRate = OvertimeAmount / OvertimeHours,
+           OTDate = as.Date(`Overtime Calendar Date`, format = "%b %d, %Y"),
+           ProjectCodeFactor = `Project Code Description`, #as.factor(`Project Code Description`),
+           # CostCenter = as.factor(`Cost Center`),
+           CostCenter = case_when(.$CostCenter == "NSC1" ~ "SECT1",
+                                  .$CostCenter == "NSC3" ~ "SECT3",
+                                  .$CostCenter == "NSC5" ~ "SECT5",
+                                  .$CostCenter == "NSC7" ~ "SECT7",
+                                  .$CostCenter == "NSC9" ~ "SECT9",
+                                  TRUE ~ .$CostCenter)) %>%
+    filter(CostCenter %in% CostCentersSelected$CostCenter,
+           OTDate >= fromdate) %>%
+    left_join(activitylookup, by = c("Activity" = "ActivityAbrv")) %>%
+    left_join(payperiod2017lookup, by = c("OTDate" = "Date")) %>%
+    mutate(ActivityGrouping = factor(ActivityGrouping, levels = c("Court", 
+                                                                  "CompletingAssignment",
+                                                                  "CallBack", 
+                                                                  "CommunityMeeting", 
+                                                                  "Project", 
+                                                                  "PersonnelShortage", 
+                                                                  "Other"))) %>%
+    select(PayPeriodListed, PayPeriod, firstdate, lastdate, OTDate, WorkingPlatoon, 
+           CostCenter, ProjectCodeFactor, OvertimeAmount, OvertimeHours, OvertimeRate,
+           PersonnelName_New, IBM_New, Rank_New, Type, ActivityFull, ActivityGrouping)
+
+numofslips <- nrow(otdata)
+
+```
+
+Overview
+=====================================================================================
+
+Column {data-width=500 .tabset}
+-----------------------------------------------------------------------
+
+### Budgeted
+
+```{r}
+
+if(numofslips == 0) {
+    meetbudget <- CostCentersSelected %>%
+        select(Allotment) %>%
+        filter(CostCenter == params$CostCenterName) %>% 
+        mutate(AmountSpent = 0,
+               CostCenter = fct_relevel(CostCenter),
+               Budget = Budget) %>%
+        as.data.frame()
+} else {
+    meetbudget <- otdata %>%
+        group_by(CostCenter) %>%
+        summarise(AmountSpent = sum(OvertimeAmount)) %>%
+        left_join(CostCentersSelected, by = "CostCenter") %>%
+        mutate(CostCenter = as.factor(CostCenter))
+    
+    meetbudgetTotal <- data.frame(
+        LevelTwo = params$LevelTwoName,
+        AmountSpent = sum(meetbudget$AmountSpent, na.rm = TRUE),
+        Allotment = sum(meetbudget$Allotment, na.rm = TRUE)
+    )
+    }
+
+p <- plot_ly(
+    data = meetbudgetTotal,
+    x = ~LevelTwo,
+    y = ~Allotment,
+    type = "bar",
+    name = "AllottedTotal") %>%
+    add_trace(y = ~AmountSpent, name = "SpentTotal") %>%
+    layout(xaxis = list(title = ""),
+           yaxis = list(title = "", exponentformat = "none"),
+           barmode = "group",
+           hovermode = "closest")
+  
+q <- plot_ly(
+    data = meetbudget,
+    x = ~CostCenter,
+    y = ~Allotment,
+    type = "bar",
+    name = "Allotted") %>%
+    add_trace(y = ~AmountSpent, name = "Spent") %>%
+    layout(xaxis = list(title = ""),
+           yaxis = list(title = "", exponentformat = "none"),
+           barmode = "group",
+           hovermode = "closest")
+
+subplot(p, q, nrows = 2)
+
+```
+
+### Comp vs Money
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No overtime spent")
+} else {
+    type <- otdata %>%
+        group_by(Type) %>%
+        summarise(Amount = sum(OvertimeAmount))
+    typebyCostCenter <- otdata %>%
+        group_by(Type, CostCenter) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        spread(Type, Amount)
+    p <- plot_ly(
+        data = type,
+        x = ~Type,
+        y = ~Amount,
+        name = "Dollars",
+        type = "bar") %>%
+        layout(hovermode = "closest",
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none"))
+    q <- plot_ly(
+        data = typebyCostCenter,
+        x = ~CostCenter,
+        y = ~Cash,
+        type = "bar",
+        name = "Cash") %>%
+        add_trace(y = ~Comp,
+                  name = "Comp") %>%
+        layout(barmode = "group")
+    
+    subplot(p, q, nrows = 2)
+    }
+
+```
+
+### Working Platoon
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    
+    workplatoonCostCenter <- otdata %>%
+        mutate(WorkingPlatoon = as.factor(WorkingPlatoon)) %>%
+        group_by(WorkingPlatoon, CostCenter) %>%
+        summarise(Amount = sum(OvertimeAmount),
+                  HoursAmount = sum(OvertimeHours)) %>%
+        filter(!is.na(WorkingPlatoon)) # Ditching NA values
+    
+    workplatoon <- workplatoonCostCenter %>%
+        group_by(WorkingPlatoon) %>%
+        summarize(Amount = sum(Amount),
+                  HoursAmount = sum(HoursAmount))
+    
+    workplatoonCostCenter <- workplatoonCostCenter %>% 
+        select(-HoursAmount) %>% 
+        spread(WorkingPlatoon, Amount) %>%
+        rename(FirstPlatoon = `1`, 
+               SecondPlatoon = `2`, 
+               ThirdPlatoon = `3`)
+    
+    p <- plot_ly(
+        data = workplatoon,
+        x = ~WorkingPlatoon,
+        y = ~Amount,
+        name = "Platoons (all Cost Centers)",
+        type = "bar",
+        text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours.")) %>%
+        layout(xaxis = list(title = ""),
+               yaxis = list(title = "", 
+                            exponentformat = "none"))
+    
+    q <- plot_ly(
+        data = workplatoonCostCenter,
+        x = ~CostCenter,
+        y = ~FirstPlatoon,
+        type = "bar",
+        name = "FirstPlatoon") %>%
+        add_trace(y = ~SecondPlatoon,
+                  name = "SecondPlatoon") %>%
+        add_trace(y = ~ThirdPlatoon,
+                  name = "ThirdPlatoon") %>%
+        layout(yaxis = list(title = "", 
+                            barmode = "group", 
+                            exponentformat = "none"))
+
+    subplot(p, q, nrows = 2)
+    }
+
+
+```
+
+Column {data-width=500 .tabset}
+-----------------------------------------------------------------------
+
+### Project Codes
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+    } else if(nrow(otdata %>% 
+                   filter(ProjectCodeFactor != "No Project Code Specified")) == 0) {
+        cat("No project codes specified")
+    } else {
+    
+    projectcodes <- otdata %>%
+        filter(ProjectCodeFactor != "No Project Code Specified") %>%
+        group_by(ProjectCodeFactor, CostCenter) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        arrange(desc(Amount)) %>%
+        top_n(n = 10, wt = Amount) %>%
+        ungroup() %>%
+        mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, Amount)) %>%
+        spread(CostCenter, Amount, fill = 0) %>%
+        #mutate(sumCC = rowSums(.[CostCentersSelected$CostCenter], na.rm = TRUE)) %>%
+        mutate(sumCC = rowSums(select(., -ProjectCodeFactor), na.rm = TRUE)) %>%
+        arrange(desc(sumCC)) %>%
+        top_n(n = 10, wt = sumCC) %>%
+        mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, sumCC)) %>% # drop unused factor levels
+        as.data.frame()
+    
+    p <- plot_ly(
+        data = projectcodes,
+        x = projectcodes[, 2],
+        y = ~ProjectCodeFactor,
+        name = names(projectcodes)[2],
+        type = "bar",
+        orientation = "h")
+    
+    for(i in 3:(ncol(projectcodes) - 1)) {
+        p <- add_trace(
+            p,
+            x = projectcodes[, i],
+            y = ~ProjectCodeFactor,
+            name = names(projectcodes)[i])
+    }
+    
+    p <- p %>%
+        layout(margin = list(l = 200),
+               barmode = "stack",
+               hovermode = "y",
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none"))
+    
+    p
+    }
+
+
+```
+
+### Activity Types
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    activitytypes <- otdata %>%
+        group_by(ActivityGrouping, CostCenter) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        mutate(Amount = replace(Amount, is.na(Amount), 0)) %>% # replace NA values with 0
+        spread(key = CostCenter, value = Amount, fill = 0) %>%
+        ungroup() %>% 
+        mutate(sumCC = rowSums(select(., one_of(CostCentersSelected$CostCenter)))) %>% # sumCC sums up the columns with names of cost centers
+        as.data.frame()
+
+    p <- plot_ly(
+        data = activitytypes,
+        y = ~ActivityGrouping,
+        x = activitytypes[,2],
+        type = "bar",
+        name = names(activitytypes)[2],
+        orientation = "h")
+    
+    for (i in 3:(ncol(activitytypes) - 1)) {
+        p <- add_trace(
+            p,
+            x = activitytypes[, i],
+            y = ~ActivityGrouping,
+            name = names(activitytypes)[i])
+    }
+    
+    p <- p %>%
+        layout(margin = list(l = 200),
+               barmode = "stack",
+               hovermode = "y",
+               xaxis = list(title = "", exponentformat = "none"),
+               yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
+    
+    p
+    }
+    
+
+```
+
+### Top Earners
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    earners <- otdata %>%
+        group_by(PersonnelName_New, CostCenter) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        arrange(desc(Amount)) %>%
+        top_n(10) %>% 
+        ungroup() %>%
+        group_by(CostCenter) %>%
+        top_n(n = 3, wt = Amount) %>% 
+        arrange(desc(Amount)) %>%
+        mutate_if(is.character, as.factor)
+    earners$PersonnelName_New <- factor(earners$PersonnelName_New,
+                                        levels = earners$PersonnelName_New)
+
+    p <- plot_ly(
+        data = earners,
+        x = ~Amount,
+        y = ~PersonnelName_New,
+        type = "bar",
+        orientation = "h",
+        color = ~CostCenter) %>%
+        layout(margin = list(l = 200),
+               hovermode = "y",
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
+    
+    p
+    }
+
+```
+
+
+Column {data-width=500 .tabset}
+-----------------------------------------------------------------------
+
+### Time, by Fiscal Year Pay Period
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    
+    payperiod <- otdata %>%
+        group_by(PayPeriod, CostCenter) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        complete(PayPeriod, fill = list(Amount = 0)) %>%
+        #mutate(Amount = replace(Amount, is.na(Amount), 0)) %>%
+        arrange(PayPeriod) %>%
+        left_join(payperiod2017lookup %>% # get the firstdate and lastdate in there
+                      select(-Date) %>% 
+                      distinct(),
+                  by = "PayPeriod") %>%
+        spread(CostCenter, Amount, fill = 0) %>%
+        left_join(otdata %>% group_by(PayPeriod) %>% summarise(TotalAmount = sum(OvertimeAmount)),
+                  by = "PayPeriod") # Instead of doing rowSums - don't need to know CostCenter names this way
+
+# Need a way to get the unused payperiods in there
+    
+    plotpayperiod <- anti_join(payperiod2017lookup, payperiod, by = "PayPeriod") %>%
+        select(-Date) %>%
+        distinct() %>%
+        mutate(TotalAmount = 0) %>%
+        bind_rows(payperiod) %>%
+        arrange(PayPeriod)
+    
+    p <- plot_ly(
+        data = plotpayperiod,
+        x = ~as.factor(PayPeriod),
+        y = ~TotalAmount,
+        name = "Total",
+        type = "scatter",
+        mode = "lines",
+        text = paste0("$",
+                      plotpayperiod$TotalAmount,
+                      " spent from ",
+                      plotpayperiod$firstdate,
+                      " to ",
+                      plotpayperiod$lastdate))
+    
+    for (i in 5:ncol(plotpayperiod)) {
+        p <- add_trace(
+            p,
+            y = plotpayperiod[, i],
+            name = names(plotpayperiod)[i],
+            text = paste0("$",
+                          plotpayperiod[, i],
+                          " spent from ",
+                          plotpayperiod$firstdate,
+                          " to ",
+                          plotpayperiod$lastdate))
+    }
+    p <- p %>%
+        layout(hovermode = "closest",
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none"))
+    
+    p
+    }
+```
+
+### Time, By Day
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+        
+    byday <- otdata %>%
+        group_by(OTDate, CostCenter) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        arrange(desc(Amount))
+    bydaytotal <- byday %>% 
+        group_by(OTDate) %>% 
+        summarise(TotalAmount = sum(Amount))
+    
+    p <- plot_ly(
+        data = bydaytotal,
+        x = ~OTDate,
+        y = ~TotalAmount,
+        type = "scatter",
+        text = paste0("$", 
+                      byday$Amount, 
+                      " spent on ", 
+                      byday$OTDate)) %>%
+        layout(hovermode = "closest",
+               yaxis = list(title = "", 
+                            exponentformat = "none"),
+               xaxis = list(title = ""))
+    
+    q <- plot_ly(
+        data = byday,
+        x = ~OTDate,
+        y = ~Amount,
+        text = paste0("$", byday$Amount, " spent on ", byday$OTDate),
+        color = ~CostCenter) %>%
+        layout(hovermode = "closest",
+               yaxis = list(title = "", 
+                            exponentformat = "none"),
+               xaxis = list(title = ""))
+    
+    #subplot(p, q, nrows = 2)
+    q
+    }
+
+```
+
+### Top Days
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    
+    # Top 10 days overall, for stacked bar chart
+    topdates <- otdata %>%
+                   group_by(OTDate) %>%
+                   summarise(Amount = sum(OvertimeAmount)) %>%
+                   top_n(10, wt = Amount) %>%
+                   .$OTDate
+    topdays2 <- otdata %>%
+        filter(OTDate %in% topdates) %>%
+        group_by(OTDate, CostCenter) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        ungroup() %>%
+        spread(CostCenter, Amount, fill = 0) %>%
+        mutate(sumCC = rowSums(select(., -OTDate), na.rm = TRUE)) %>%
+        arrange(desc(sumCC)) %>%
+        mutate(OTDate = factor(OTDate)) %>%
+        mutate(OTDate = factor(OTDate, levels = OTDate)) %>%
+        as.data.frame()
+    
+    p <- plot_ly(
+        data = topdays2,
+        x = topdays2[, 2], # Start at column 2, since column 1 is OTDate
+        y = ~OTDate,
+        name = names(topdays2)[2],
+        type = "bar",
+        orientation = "h")
+    
+    # Add a trace for each Cost Center
+    for(i in 3:(ncol(topdays2) - 1)) { # Stop before you reach the TotalSum column
+        p <- add_trace(
+            p,
+            x = topdays2[, i],
+            y = topdays2$OTDate,
+            name = names(topdays2)[i])
+    }
+    p <- p %>%
+        layout(barmode = "stack",
+               margin = list(l = 200),
+               yaxis = list(autorange = "reversed"),
+               xaxis = list(exponentformat = "none"))
+    
+    p
+    
+    }
+
+```
+
+Data
+=====================================================================================
+
+### View of data
+
+```{r}
+datatable(otdata %>% 
+              select(PersonnelName_New, Rank_New, Type, OvertimeHours, OvertimeAmount, OTDate, CostCenter, ProjectCodeFactor, ActivityFull),
+          filter = "top", 
+          rownames = FALSE,
+          colnames = c("Name", "Rank", "Type", "Hours", "Amount", "Date", "Cost Center", "Project Code", "Activity Type"),
+          extensions = c("Buttons", "ColReorder"),
+          options = list(dom = "Blftp",
+                         colReorder = TRUE,
+                         pagelength = 20,
+                         lengthMenu = c(10, 20, 50, 100),
+                         bPaginate = TRUE,
+                         columnDefs = list(list(className = "dt-right", 
+                                                targets = "_all")
+                                           ),
+                         buttons = c("csv")
+                         )
+          )
+
+
+```
