@@ -2,7 +2,7 @@
 title: "Overtime Dashboard for `r params$LevelTwoName`, as of `r format(Sys.Date() - 3, '%Y/%m/%d')`"
 output: 
   flexdashboard::flex_dashboard:
-    logo: Y:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
+    logo: Z:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
     orientation: columns
     vertical_layout: fill
     theme: paper
@@ -25,7 +25,7 @@ library(reshape2)
 library(forcats)
 library(RColorBrewer)
 
-otpath <- "Y:/Projects/dashboard/RPDOvertimeDashboard/"
+otpath <- "Z:/Projects/dashboard/RPDOvertimeDashboard/"
 fromdate <- params$StartDate
 todate <- Sys.Date()
 
@@ -66,7 +66,7 @@ activitylookup <- data.frame(
 
 # Read in data
 
-CostCentersSelected <- read_csv("Y:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
+CostCentersSelected <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
     select(CostCenter = `Overtime Allotments`,
            Allotment = `FY18 Budget`,
            LevelTwo = `2nd Level`,
@@ -150,10 +150,12 @@ p <- plot_ly(
     x = ~LevelTwo,
     y = ~Allotment,
     type = "bar",
-    name = "AllottedTotal") %>%
-    add_trace(y = ~AmountSpent, name = "SpentTotal") %>%
+    name = "AllottedTotal",
+    marker = list(color = "blue"),
+    showlegend = FALSE) %>%
+    add_trace(y = ~AmountSpent, name = "SpentTotal", marker = list(color = "red"), showlegend = FALSE) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
            barmode = "group",
            hovermode = "closest")
   
@@ -162,10 +164,11 @@ q <- plot_ly(
     x = ~CostCenter,
     y = ~Allotment,
     type = "bar",
-    name = "Allotted") %>%
-    add_trace(y = ~AmountSpent, name = "Spent") %>%
+    name = "Allotted",
+    marker = list(color = "blue")) %>%
+    add_trace(y = ~AmountSpent, name = "Spent", marker = list(color = "red")) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
            barmode = "group",
            hovermode = "closest")
 
@@ -182,7 +185,11 @@ if(numofslips == 0) {
 } else {
     type <- otdata %>%
         group_by(Type) %>%
-        summarise(Amount = sum(OvertimeAmount))
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        mutate(Type = factor(Type, levels = c("Cash", "Comp"))) %>%
+        complete(Type, fill = list(Amount = 0)) %>%
+        mutate(color = case_when(.$Type == "Cash" ~ "forestgreen",
+                                 .$Type == "Comp" ~ "darkgrey"))
     typebyCostCenter <- otdata %>%
         group_by(Type, CostCenter) %>%
         summarise(Amount = sum(OvertimeAmount)) %>%
@@ -192,7 +199,9 @@ if(numofslips == 0) {
         x = ~Type,
         y = ~Amount,
         name = "Dollars",
-        type = "bar") %>%
+        type = "bar",
+        marker = list(color = ~color),
+        showlegend = FALSE) %>%
         layout(hovermode = "closest",
                xaxis = list(title = ""),
                yaxis = list(title = "", exponentformat = "none"))
@@ -201,9 +210,11 @@ if(numofslips == 0) {
         x = ~CostCenter,
         y = ~Cash,
         type = "bar",
-        name = "Cash") %>%
+        name = "Cash",
+        marker = list(color = "forestgreen")) %>%
         add_trace(y = ~Comp,
-                  name = "Comp") %>%
+                  name = "Comp",
+                  marker = list(color = "darkgrey")) %>%
         layout(barmode = "group")
     
     subplot(p, q, nrows = 2)
@@ -229,7 +240,10 @@ if(numofslips == 0) {
     workplatoon <- workplatoonCostCenter %>%
         group_by(WorkingPlatoon) %>%
         summarize(Amount = sum(Amount),
-                  HoursAmount = sum(HoursAmount))
+                  HoursAmount = sum(HoursAmount)) %>%
+        mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
+                                 .$WorkingPlatoon == 2 ~ "lightslategrey", 
+                                 .$WorkingPlatoon == 3 ~ "slategrey"))
     
     workplatoonCostCenter <- workplatoonCostCenter %>% 
         select(-HoursAmount) %>% 
@@ -242,8 +256,10 @@ if(numofslips == 0) {
         data = workplatoon,
         x = ~WorkingPlatoon,
         y = ~Amount,
-        name = "Platoons (all Cost Centers)",
+        name = "Platoons",
         type = "bar",
+        showlegend = FALSE,
+        marker = list(color = ~color),
         text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours.")) %>%
         layout(xaxis = list(title = ""),
                yaxis = list(title = "", 
@@ -254,11 +270,14 @@ if(numofslips == 0) {
         x = ~CostCenter,
         y = ~FirstPlatoon,
         type = "bar",
-        name = "FirstPlatoon") %>%
+        name = "FirstPlatoon",
+        marker = list(color = "lightgrey")) %>%
         add_trace(y = ~SecondPlatoon,
-                  name = "SecondPlatoon") %>%
+                  name = "SecondPlatoon",
+                  marker = list(color = "lightslategrey")) %>%
         add_trace(y = ~ThirdPlatoon,
-                  name = "ThirdPlatoon") %>%
+                  name = "ThirdPlatoon",
+                  marker = list(color = "slategrey")) %>%
         layout(yaxis = list(title = "", 
                             barmode = "group", 
                             exponentformat = "none"))
@@ -319,8 +338,8 @@ if(numofslips == 0) {
         layout(margin = list(l = 200),
                barmode = "stack",
                hovermode = "y",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "", exponentformat = "none"),
+               yaxis = list(title = ""))
     
     p
     }
@@ -402,7 +421,7 @@ if(numofslips == 0) {
         color = ~CostCenter) %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = ""),
+               xaxis = list(title = "", exponentformat = "none"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -435,8 +454,8 @@ if(numofslips == 0) {
         spread(CostCenter, Amount, fill = 0) %>%
         left_join(otdata %>% group_by(PayPeriod) %>% summarise(TotalAmount = sum(OvertimeAmount)),
                   by = "PayPeriod") # Instead of doing rowSums - don't need to know CostCenter names this way
-
-# Need a way to get the unused payperiods in there
+    
+    # Need a way to get the unused payperiods in there
     
     plotpayperiod <- anti_join(payperiod2017lookup, payperiod, by = "PayPeriod") %>%
         select(-Date) %>%
@@ -452,6 +471,7 @@ if(numofslips == 0) {
         name = "Total",
         type = "scatter",
         mode = "lines",
+        visible = TRUE,
         text = paste0("$",
                       plotpayperiod$TotalAmount,
                       " spent from ",
@@ -464,6 +484,7 @@ if(numofslips == 0) {
             p,
             y = plotpayperiod[, i],
             name = names(plotpayperiod)[i],
+            visible = "legendonly",
             text = paste0("$",
                           plotpayperiod[, i],
                           " spent from ",
@@ -572,7 +593,7 @@ if(numofslips == 0) {
     p <- p %>%
         layout(barmode = "stack",
                margin = list(l = 200),
-               yaxis = list(autorange = "reversed"),
+               yaxis = list(autorange = "reversed", title = ""),
                xaxis = list(exponentformat = "none"))
     
     p
@@ -595,7 +616,7 @@ datatable(otdata %>%
           extensions = c("Buttons", "ColReorder"),
           options = list(dom = "Blftp",
                          colReorder = TRUE,
-                         pagelength = 20,
+                         pageLength = 20,
                          lengthMenu = c(10, 20, 50, 100),
                          bPaginate = TRUE,
                          columnDefs = list(list(className = "dt-right", 

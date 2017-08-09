@@ -2,14 +2,14 @@
 title: "Overtime Dashboard for `r params$CostCenterName`, as of `r format(Sys.Date() - 3, '%Y/%m/%d')`"
 output: 
   flexdashboard::flex_dashboard:
-    logo: Y:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
+    logo: Z:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
     orientation: columns
     vertical_layout: fill
     theme: paper
 params:
     CostCenterName:
         label: "CostCenter"
-        value: "YSS"
+        value: "APND"
     StartDate:
         value: !r as.Date("2016-07-01")
 
@@ -27,7 +27,7 @@ library(reshape2)
 library(forcats)
 # Read in data
 
-otpath <- "Y:/Projects/dashboard/RPDOvertimeDashboard/"
+otpath <- "Z:/Projects/dashboard/RPDOvertimeDashboard/"
 #fromdate <- as.Date("2017-07-01")
 fromdate <- params$StartDate
 todate <- Sys.Date()
@@ -140,7 +140,7 @@ numofslips <- nrow(otdata)
 #     mutate(Budget = gsub(x = Budget, pattern = ",", replacement = ""),
 #            Budget = as.numeric(Budget))
 
-allotments <- read_csv("Y:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
+allotments <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
     select(CostCenter = `Overtime Allotments`,
            Allotment = `FY18 Budget`) %>%
     mutate(Allotment = gsub(Allotment, pattern = ",", replacement = "") %>%
@@ -180,8 +180,9 @@ p <- plot_ly(
     x = ~CostCenter,
     y = ~Allotment,
     type = "bar",
-    name = "Allotted") %>%
-    add_trace(y = ~AmountSpent, name = "Spent") %>%
+    name = "Allotted",
+    marker = list(color = "blue")) %>%
+    add_trace(y = ~AmountSpent, name = "Spent", marker = list(color = "red")) %>%
     layout(xaxis = list(title = ""),
            yaxis = list(title = "", exponentformat = "none"),
            barmode = "group",
@@ -200,13 +201,19 @@ if(numofslips == 0) {
 } else {
     type <- otdata %>%
         group_by(Type) %>%
-        summarise(Amount = sum(OvertimeAmount))
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        mutate(Type = factor(Type, levels = c("Cash", "Comp"))) %>%
+        complete(Type, fill = list(Amount = 0)) %>%
+        mutate(color = case_when(.$Type == "Cash" ~ "forestgreen",
+                                 .$Type == "Comp" ~ "darkgrey"))
+        
     p <- plot_ly(
         data = type,
         x = ~Type,
         y = ~Amount,
         name = "Comp vs Money",
-        type = "bar") %>%
+        type = "bar",
+        marker = list(color = ~color)) %>%
         layout(hovermode = "closest",
                xaxis = list(title = ""),
                yaxis = list(title = "", exponentformat = "none"))
@@ -229,14 +236,19 @@ if(numofslips == 0) {
         group_by(WorkingPlatoon) %>%
         summarise(Amount = sum(OvertimeAmount),
                   HoursAmount = sum(OvertimeHours)) %>%
-        filter(!is.na(WorkingPlatoon)) # Ditching NA values
+        filter(!is.na(WorkingPlatoon)) %>% # Ditching NA values
+        mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
+                                 .$WorkingPlatoon == 2 ~ "lightslategrey", 
+                                 .$WorkingPlatoon == 3 ~ "slategrey"))
     
     p <- plot_ly(
         data = workplatoon,
         x = ~WorkingPlatoon,
         y = ~Amount,
         type = "bar",
-        text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours.")) %>%
+        text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours."),
+        opacity = .5,
+        marker = list(color = ~color)) %>%
         layout(xaxis = list(title = ""),
                yaxis = list(title = ""))
     p
@@ -419,7 +431,11 @@ if(numofslips == 0) {
         layout(hovermode = "closest",
                yaxis = list(title = "", 
                             exponentformat = "none"),
-               xaxis = list(title = ""))
+               xaxis = list(title = "",
+                            tickmode = "array"
+                            #dtick = 1000 * 60 * 60 * 24 * 90
+                            )
+               )
     
     
     p
@@ -449,7 +465,8 @@ if(numofslips == 0) {
         type = "bar",
         orientation = "h") %>%
         layout(margin = list(l = 100),
-               hovermode = "y")
+               hovermode = "y",
+               yaxis = list(title = ""))
     
     p
     }
@@ -470,7 +487,7 @@ datatable(otdata %>%
           extensions = c("Buttons", "ColReorder"),
           options = list(dom = "Blftp",
                          colReorder = TRUE,
-                         pagelength = 20,
+                         pageLength = 20,
                          lengthMenu = c(10, 20, 50, 100),
                          bPaginate = TRUE,
                          columnDefs = list(list(className = "dt-right", 

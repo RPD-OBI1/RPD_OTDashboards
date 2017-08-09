@@ -2,14 +2,14 @@
 title: "Overtime Dashboard for `r params$LevelThreeName`, as of `r format(Sys.Date() - 3, '%Y/%m/%d')`"
 output: 
   flexdashboard::flex_dashboard:
-    logo: Y:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
+    logo: Z:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
     orientation: columns
     vertical_layout: fill
     theme: paper
 params:
     LevelThreeName:
         label: "CostCenter2ndLevel"
-        value: "SPEV"
+        value: "CHIEF"
     StartDate:
         value: !r as.Date("2016-07-01")
 ---
@@ -25,7 +25,7 @@ library(reshape2)
 library(forcats)
 library(RColorBrewer)
 
-otpath <- "Y:/Projects/dashboard/RPDOvertimeDashboard/"
+otpath <- "Z:/Projects/dashboard/RPDOvertimeDashboard/"
 fromdate <- params$StartDate
 todate <- Sys.Date()
 
@@ -64,7 +64,7 @@ activitylookup <- data.frame(
     stringsAsFactors = FALSE
 )
 
-CostCentersSelected <- read_csv("Y:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
+CostCentersSelected <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
     select(CostCenter = `Overtime Allotments`,
            Allotment = `FY18 Budget`,
            LevelTwo = `2nd Level`,
@@ -154,7 +154,8 @@ if(numofslips == 0) {
         group_by(LevelTwo) %>%
         summarise(AmountSpent = sum(OvertimeAmount)) %>%
         left_join(LevelTwoAllotments, by = "LevelTwo") %>%
-        mutate(LevelTwo = as.factor(LevelTwo))
+        mutate(LevelTwo = as.factor(LevelTwo)) %>%
+        mutate(LevelTwo = fct_reorder(LevelTwo, AmountSpent, .desc = TRUE))
     
     meetbudget2Total <- data.frame(
         LevelThree = params$LevelThreeName,
@@ -166,13 +167,15 @@ if(numofslips == 0) {
 
 p <- plot_ly(
     data = meetbudget2Total,
-    x = ~ LevelThree,
+    x = ~LevelThree,
     y = ~Allotment,
     type = "bar",
-    name = "AllottedTotal") %>%
-    add_trace(y = ~AmountSpent, name = "SpentTotal") %>%
+    name = "AllottedTotal",
+    marker = list(color = "blue"),
+    showlegend = FALSE) %>%
+    add_trace(y = ~AmountSpent, name = "SpentTotal", marker = list(color = "red"), showlegend = FALSE) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
            barmode = "group",
            hovermode = "closest")
 
@@ -181,10 +184,11 @@ q <- plot_ly(
     x = ~LevelTwo,
     y = ~LevelTwoAllotment,
     type = "bar",
-    name = "Allotted") %>%
-    add_trace(y = ~AmountSpent, name = "Spent") %>%
+    name = "Allotted",
+    marker = list(color = "blue")) %>%
+    add_trace(y = ~AmountSpent, name = "Spent", marker = list(color = "red")) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
            barmode = "group",
            hovermode = "closest")
 
@@ -201,7 +205,11 @@ if(numofslips == 0) {
 } else {
     type <- otdata %>%
         group_by(Type) %>%
-        summarise(Amount = sum(OvertimeAmount))
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        mutate(Type = factor(Type, levels = c("Cash", "Comp"))) %>%
+        complete(Type, fill = list(Amount = 0)) %>%
+        mutate(color = case_when(.$Type == "Cash" ~ "forestgreen",
+                                 .$Type == "Comp" ~ "darkgrey"))
     typebyLevelTwo <- otdata %>%
         group_by(Type, LevelTwo) %>%
         summarise(Amount = sum(OvertimeAmount)) %>%
@@ -211,19 +219,26 @@ if(numofslips == 0) {
         x = ~Type,
         y = ~Amount,
         name = "Dollars",
-        type = "bar") %>%
+        showlegend = FALSE,
+        type = "bar",
+        marker = list(color = ~color)) %>%
         layout(hovermode = "closest",
                xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               yaxis = list(title = "", exponentformat = "none", prefix = "$"),
+               margin = list(l = 75))
     q <- plot_ly(
         data = typebyLevelTwo,
         x = ~LevelTwo,
         y = ~Cash,
         type = "bar",
-        name = "Cash") %>%
+        name = "Cash",
+        marker = list(color = "forestgreen")) %>%
         add_trace(y = ~Comp,
-                  name = "Comp") %>%
-        layout(barmode = "group")
+                  name = "Comp",
+                  marker = list(color = "darkgrey")) %>%
+        layout(barmode = "group",
+               yaxis = list(prefix = "$", exponentformat = "none"),
+               margin = list(l = 75))
     
     subplot(p, q, nrows = 2)
     }
@@ -248,7 +263,10 @@ if(numofslips == 0) {
     workplatoon <- workplatoonL2 %>%
         group_by(WorkingPlatoon) %>%
         summarize(Amount = sum(Amount),
-                  HoursAmount = sum(HoursAmount))
+                  HoursAmount = sum(HoursAmount)) %>%
+        mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
+                                 .$WorkingPlatoon == 2 ~ "lightslategrey", 
+                                 .$WorkingPlatoon == 3 ~ "slategrey"))
     
     workplatoonL2 <- workplatoonL2 %>% 
         select(-HoursAmount) %>% 
@@ -261,8 +279,9 @@ if(numofslips == 0) {
         data = workplatoon,
         x = ~WorkingPlatoon,
         y = ~Amount,
-        name = "Platoons (all Cost Centers)",
+        name = "Platoons",
         type = "bar",
+        marker = list(color = ~color),
         text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours.")) %>%
         layout(xaxis = list(title = ""),
                yaxis = list(title = "", 
@@ -273,11 +292,14 @@ if(numofslips == 0) {
         x = ~LevelTwo,
         y = ~FirstPlatoon,
         type = "bar",
-        name = "FirstPlatoon") %>%
+        name = "FirstPlatoon",
+        marker = list(color = "lightgrey")) %>%
         add_trace(y = ~SecondPlatoon,
-                  name = "SecondPlatoon") %>%
+                  name = "SecondPlatoon",
+                  marker = list(color = "lightslategrey")) %>%
         add_trace(y = ~ThirdPlatoon,
-                  name = "ThirdPlatoon") %>%
+                  name = "ThirdPlatoon",
+                  marker = list(color = "slategrey")) %>%
         layout(yaxis = list(title = "", 
                             barmode = "group", 
                             exponentformat = "none"))
@@ -376,7 +398,7 @@ if(numofslips == 0) {
             layout(margin = list(l = 200),
                    barmode = "stack",
                    hovermode = "y",
-                   xaxis = list(title = ""),
+                   xaxis = list(title = "", exponentformat = "none"),
                    yaxis = list(title = "", exponentformat = "none"))
         
         p
@@ -488,7 +510,7 @@ if(numofslips == 0) {
         color = ~LevelTwo) %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = ""),
+               xaxis = list(title = "", exponentformat = "none"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -539,6 +561,7 @@ if(numofslips == 0) {
         name = "Total",
         type = "scatter",
         mode = "lines",
+        visible = TRUE,
         text = paste0("$",
                       plotpayperiod$TotalAmount,
                       " spent from ",
@@ -551,6 +574,7 @@ if(numofslips == 0) {
             p,
             y = plotpayperiod[, i],
             name = names(plotpayperiod)[i],
+            visible = "legendonly",
             text = paste0("$",
                           plotpayperiod[, i],
                           " spent from ",
@@ -608,6 +632,7 @@ if(numofslips == 0) {
             p,
             y = plotpayperiod[, i],
             name = names(plotpayperiod)[i],
+            visible = "legendonly",
             text = paste0("$",
                           plotpayperiod[, i],
                           " spent from ",
@@ -747,11 +772,14 @@ if(numofslips == 0) {
     
     p <- plot_ly(
         data = topdays2,
+        x = topdays2[, 2], # Start at column 2, since column 1 is OTDate
+        y = ~OTDate,
+        name = names(topdays2)[2],
         type = "bar",
         orientation = "h")
     
     # Add a trace for each Cost Center
-    for(i in 2:(ncol(topdays2) - 1)) { # Stop before you reach the TotalSum column
+    for(i in 3:(ncol(topdays2) - 1)) { # Stop before you reach the TotalSum column
         p <- add_trace(
             p,
             x = topdays2[, i],
@@ -761,7 +789,7 @@ if(numofslips == 0) {
     p <- p %>%
         layout(barmode = "stack",
                margin = list(l = 200),
-               yaxis = list(autorange = "reversed"),
+               yaxis = list(autorange = "reversed", title = ""),
                xaxis = list(exponentformat = "none"))
     
     p
@@ -786,7 +814,7 @@ datatable(otdata %>%
           extensions = c("Buttons", "ColReorder"),
           options = list(dom = "Blftp",
                          colReorder = TRUE,
-                         pagelength = 20,
+                         pageLength = 20,
                          lengthMenu = c(10, 20, 50, 100),
                          bPaginate = TRUE,
                          columnDefs = list(list(className = "dt-right", 
