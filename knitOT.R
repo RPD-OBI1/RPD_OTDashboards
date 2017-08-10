@@ -60,8 +60,8 @@ LevelThrees <- hierarchy %>%
     distinct() %>%
     .$LevelThree
 
-for (i in seq(thecostcenters)) {
-    firstlevelrender(CCName = thecostcenters[i], 
+for (i in seq(hierarchy$CostCenter)) {
+    firstlevelrender(CCName = hierarchy$CostCenter[i], 
                      startingdate = as.Date("2016-07-01"),
                      path = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/")
 }
@@ -78,9 +78,9 @@ for (i in seq(LevelThrees)) {
                      path = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/ThirdLevels/")
 }
 
-rmarkdown::render("Z:/Projects/dashboard/RPDOvertimeDashboard/FourthLevel_OTdashboardMockup.RMD",
+rmarkdown::render("Z:/Projects/dashboard/RPDOvertimeDashboard/OT_repo/RPD_OTDashboards/FourthLevel_OTdashboard.RMD",
                   params = list(StartDate = as.Date("2016-07-01")), 
-                  output_file = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/FourthLevel/FourthLevel_OTdashboardMockup.html")
+                  output_file = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/FourthLevel/FourthLevel_OTdashboard.html")
 
 end <- Sys.time()
 took <- difftime(end, start)
