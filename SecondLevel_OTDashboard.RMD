@@ -9,9 +9,9 @@ output:
 params:
     LevelTwoName:
         label: "CostCenter2ndLevel"
-        value: "SIS"
+        value: "SOS"
     StartDate:
-        value: !r as.Date("2016-07-01")
+        value: !r as.Date("2017-07-01")
 ---
 
 ```{r setup, include=FALSE}
@@ -93,7 +93,8 @@ otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
                                   .$CostCenter == "NSC5" ~ "SECT5",
                                   .$CostCenter == "NSC7" ~ "SECT7",
                                   .$CostCenter == "NSC9" ~ "SECT9",
-                                  TRUE ~ .$CostCenter)) %>%
+                                  TRUE ~ .$CostCenter),
+           WorkingPlatoon = factor(WorkingPlatoon, levels = c("1", "2", "3"))) %>%
     filter(CostCenter %in% CostCentersSelected$CostCenter,
            OTDate >= fromdate) %>%
     left_join(activitylookup, by = c("Activity" = "ActivityAbrv")) %>%
@@ -108,6 +109,19 @@ otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
     select(PayPeriodListed, PayPeriod, firstdate, lastdate, OTDate, WorkingPlatoon, 
            CostCenter, ProjectCodeFactor, OvertimeAmount, OvertimeHours, OvertimeRate,
            PersonnelName_New, IBM_New, Rank_New, Type, ActivityFull, ActivityGrouping)
+
+pal <- data.frame(color = brewer.pal(n = otdata %>% # Build color palette
+                                         select(CostCenter) %>% 
+                                         distinct() %>% 
+                                         nrow(),
+                                     name = "Paired"),
+                  name = otdata %>% 
+                      select(CostCenter) %>% 
+                      distinct(),
+                  stringsAsFactors = FALSE)
+
+otdata <- otdata %>%
+    left_join(pal, by = "CostCenter")
 
 numofslips <- nrow(otdata)
 
@@ -241,13 +255,14 @@ if(numofslips == 0) {
         group_by(WorkingPlatoon) %>%
         summarize(Amount = sum(Amount),
                   HoursAmount = sum(HoursAmount)) %>%
+        complete(WorkingPlatoon, fill = list(Amount = 0, HoursAmount = 0)) %>%
         mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
                                  .$WorkingPlatoon == 2 ~ "lightslategrey", 
                                  .$WorkingPlatoon == 3 ~ "slategrey"))
     
     workplatoonCostCenter <- workplatoonCostCenter %>% 
         select(-HoursAmount) %>% 
-        spread(WorkingPlatoon, Amount) %>%
+        spread(WorkingPlatoon, Amount, fill = 0) %>%
         rename(FirstPlatoon = `1`, 
                SecondPlatoon = `2`, 
                ThirdPlatoon = `3`)
@@ -323,6 +338,7 @@ if(numofslips == 0) {
         x = projectcodes[, 2],
         y = ~ProjectCodeFactor,
         name = names(projectcodes)[2],
+        marker = list(color = otdata$color[match(names(projectcodes[2]), otdata$CostCenter)]),
         type = "bar",
         orientation = "h")
     
@@ -331,6 +347,7 @@ if(numofslips == 0) {
             p,
             x = projectcodes[, i],
             y = ~ProjectCodeFactor,
+            marker = list(color = otdata$color[match(names(projectcodes[i]), otdata$CostCenter)]),
             name = names(projectcodes)[i])
     }
     
@@ -358,7 +375,9 @@ if(numofslips == 0) {
         group_by(ActivityGrouping, CostCenter) %>%
         summarise(Amount = sum(OvertimeAmount)) %>%
         mutate(Amount = replace(Amount, is.na(Amount), 0)) %>% # replace NA values with 0
-        spread(key = CostCenter, value = Amount, fill = 0) %>%
+        complete(ActivityGrouping, CostCenter, fill = list(Amount = 0)) %>%
+        distinct() %>%
+        spread(key = CostCenter, value = Amount) %>%
         ungroup() %>% 
         mutate(sumCC = rowSums(select(., one_of(CostCentersSelected$CostCenter)))) %>% # sumCC sums up the columns with names of cost centers
         as.data.frame()
@@ -368,6 +387,7 @@ if(numofslips == 0) {
         y = ~ActivityGrouping,
         x = activitytypes[,2],
         type = "bar",
+        marker = list(color = otdata$color[match(names(activitytypes[2]), otdata$CostCenter)]),
         name = names(activitytypes)[2],
         orientation = "h")
     
@@ -376,6 +396,7 @@ if(numofslips == 0) {
             p,
             x = activitytypes[, i],
             y = ~ActivityGrouping,
+            marker = list(color = otdata$color[match(names(activitytypes[i]), otdata$CostCenter)]),
             name = names(activitytypes)[i])
     }
     
@@ -408,7 +429,8 @@ if(numofslips == 0) {
         group_by(CostCenter) %>%
         top_n(n = 3, wt = Amount) %>% 
         arrange(desc(Amount)) %>%
-        mutate_if(is.character, as.factor)
+        mutate_if(is.character, as.factor) %>%
+        left_join(pal, by = "CostCenter")
     earners$PersonnelName_New <- factor(earners$PersonnelName_New,
                                         levels = earners$PersonnelName_New)
 
@@ -418,10 +440,11 @@ if(numofslips == 0) {
         y = ~PersonnelName_New,
         type = "bar",
         orientation = "h",
-        color = ~CostCenter) %>%
+        marker = list(color = ~color),
+        showlegend = TRUE) %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -484,6 +507,7 @@ if(numofslips == 0) {
             p,
             y = plotpayperiod[, i],
             name = names(plotpayperiod)[i],
+            line = list(color = otdata$color[match(names(plotpayperiod[i]), otdata$CostCenter)]),
             visible = "legendonly",
             text = paste0("$",
                           plotpayperiod[, i],
@@ -512,7 +536,8 @@ if(numofslips == 0) {
     byday <- otdata %>%
         group_by(OTDate, CostCenter) %>%
         summarise(Amount = sum(OvertimeAmount)) %>%
-        arrange(desc(Amount))
+        arrange(desc(Amount)) %>%
+        left_join(pal, by = "CostCenter")
     bydaytotal <- byday %>% 
         group_by(OTDate) %>% 
         summarise(TotalAmount = sum(Amount))
@@ -535,6 +560,9 @@ if(numofslips == 0) {
         data = byday,
         x = ~OTDate,
         y = ~Amount,
+        marker = list(color = ~color),
+        type = "scatter",
+        mode = "markers",
         text = paste0("$", byday$Amount, " spent on ", byday$OTDate),
         color = ~CostCenter) %>%
         layout(hovermode = "closest",
@@ -579,6 +607,7 @@ if(numofslips == 0) {
         x = topdays2[, 2], # Start at column 2, since column 1 is OTDate
         y = ~OTDate,
         name = names(topdays2)[2],
+        marker = list(color = otdata$color[match(names(topdays2[2]), otdata$CostCenter)]),
         type = "bar",
         orientation = "h")
     
@@ -588,6 +617,7 @@ if(numofslips == 0) {
             p,
             x = topdays2[, i],
             y = topdays2$OTDate,
+            marker = list(color = otdata$color[match(names(topdays2[i]), otdata$CostCenter)]),
             name = names(topdays2)[i])
     }
     p <- p %>%
@@ -608,6 +638,9 @@ Data
 ### View of data
 
 ```{r}
+
+otdata$OTDate <- as.character(otdata$OTDate) # to dump the scroll bar in the datatable
+
 datatable(otdata %>% 
               select(PersonnelName_New, Rank_New, Type, OvertimeHours, OvertimeAmount, OTDate, CostCenter, ProjectCodeFactor, ActivityFull),
           filter = "top", 

@@ -11,7 +11,7 @@ params:
         label: "CostCenter"
         value: "APND"
     StartDate:
-        value: !r as.Date("2016-07-01")
+        value: !r as.Date("2017-07-01")
 
 ---
 
@@ -117,7 +117,8 @@ otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
                                   .$CostCenter == "NSC5" ~ "SECT5",
                                   .$CostCenter == "NSC7" ~ "SECT7",
                                   .$CostCenter == "NSC9" ~ "SECT9",
-                                  TRUE ~ .$CostCenter)) %>%
+                                  TRUE ~ .$CostCenter),
+           WorkingPlatoon = factor(WorkingPlatoon, levels = c("1", "2", "3"))) %>%
     filter(CostCenter == params$CostCenterName,
            OTDate >= fromdate) %>%
     left_join(activitylookup, by = c("Activity" = "ActivityAbrv")) %>%
@@ -236,6 +237,7 @@ if(numofslips == 0) {
         group_by(WorkingPlatoon) %>%
         summarise(Amount = sum(OvertimeAmount),
                   HoursAmount = sum(OvertimeHours)) %>%
+        complete(WorkingPlatoon, fill = list(Amount = 0, HoursAmount = 0)) %>%
         filter(!is.na(WorkingPlatoon)) %>% # Ditching NA values
         mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
                                  .$WorkingPlatoon == 2 ~ "lightslategrey", 

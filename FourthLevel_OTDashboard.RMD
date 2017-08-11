@@ -8,7 +8,7 @@ output:
     theme: paper
 params:
     StartDate:
-        value: !r as.Date("2016-07-01")
+        value: !r as.Date("2017-07-01")
 ---
 
 
@@ -126,7 +126,8 @@ otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
                                   .$CostCenter == "NSC5" ~ "SECT5",
                                   .$CostCenter == "NSC7" ~ "SECT7",
                                   .$CostCenter == "NSC9" ~ "SECT9",
-                                  TRUE ~ .$CostCenter)) %>%
+                                  TRUE ~ .$CostCenter),
+           WorkingPlatoon = factor(WorkingPlatoon, levels = c("1", "2", "3"))) %>%
     filter(OTDate >= fromdate) %>%
     left_join(activitylookup, by = c("Activity" = "ActivityAbrv")) %>%
     left_join(payperiod2017lookup, by = c("OTDate" = "Date")) %>%
@@ -372,7 +373,7 @@ if(numofslips == 0) {
         arrange(desc(sumCC)) %>%
         top_n(n = 10, wt = sumCC) %>%
         mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, sumCC)) %>% # drop unused factor levels
-        select(-`<NA>`) %>%
+        select(-contains("`<NA>`")) %>%
         as.data.frame()
     
     p <- plot_ly(

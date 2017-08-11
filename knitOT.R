@@ -37,7 +37,7 @@ thirdlevelrender <- function(levelthreename, path, startingdate) {
 
 # Function for third-level dashboard template
 
-
+ditchTheseCostCenters <- c("Total", "Budget", "Difference", "NSC1", "NSC3", "NSC5", "NSC7", "NSC9")
 
 hierarchy <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
     select(CostCenter = `Overtime Allotments`,
@@ -45,6 +45,7 @@ hierarchy <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets
            LevelTwo = `2nd Level`,
            LevelThree = `3rd Level`,
            LevelFour = `4th Level`) %>%
+    filter(! is.na(CostCenter) & ! CostCenter %in% ditchTheseCostCenters) %>%
     mutate(Allotment = gsub(Allotment, pattern = ",", replacement = "") %>%
                as.numeric())
 
@@ -62,24 +63,24 @@ LevelThrees <- hierarchy %>%
 
 for (i in seq(hierarchy$CostCenter)) {
     firstlevelrender(CCName = hierarchy$CostCenter[i], 
-                     startingdate = as.Date("2016-07-01"),
+                     startingdate = as.Date("2017-07-01"),
                      path = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/")
 }
 
 for (i in seq(LevelTwos)) {
     secondlevelrender(leveltwoname = LevelTwos[i],
-                      startingdate = as.Date("2016-07-01"),
+                      startingdate = as.Date("2017-07-01"),
                       path = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/SecondLevels/")
 }
 
 for (i in seq(LevelThrees)) {
     thirdlevelrender(levelthreename = LevelThrees[i],
-                     startingdate = as.Date("2016-07-01"),
+                     startingdate = as.Date("2017-07-01"),
                      path = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/ThirdLevels/")
 }
 
 rmarkdown::render("Z:/Projects/dashboard/RPDOvertimeDashboard/OT_repo/RPD_OTDashboards/FourthLevel_OTdashboard.RMD",
-                  params = list(StartDate = as.Date("2016-07-01")), 
+                  params = list(StartDate = as.Date("2017-07-01")), 
                   output_file = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/FourthLevel/FourthLevel_OTdashboard.html")
 
 end <- Sys.time()

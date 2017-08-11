@@ -9,9 +9,9 @@ output:
 params:
     LevelThreeName:
         label: "CostCenter2ndLevel"
-        value: "CHIEF"
+        value: "SPEV"
     StartDate:
-        value: !r as.Date("2016-07-01")
+        value: !r as.Date("2017-07-01")
 ---
 
 ```{r setup, include=FALSE}
@@ -93,7 +93,8 @@ otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
                                   .$CostCenter == "NSC5" ~ "SECT5",
                                   .$CostCenter == "NSC7" ~ "SECT7",
                                   .$CostCenter == "NSC9" ~ "SECT9",
-                                  TRUE ~ .$CostCenter)) %>%
+                                  TRUE ~ .$CostCenter),
+           WorkingPlatoon = factor(WorkingPlatoon, levels = c("1", "2", "3"))) %>%
     filter(CostCenter %in% CostCentersSelected$CostCenter,
            OTDate >= fromdate) %>%
     left_join(activitylookup, by = c("Activity" = "ActivityAbrv")) %>%
@@ -264,13 +265,14 @@ if(numofslips == 0) {
         group_by(WorkingPlatoon) %>%
         summarize(Amount = sum(Amount),
                   HoursAmount = sum(HoursAmount)) %>%
+        complete(WorkingPlatoon, fill = list(Amount = 0, HoursAmount = 0)) %>%
         mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
                                  .$WorkingPlatoon == 2 ~ "lightslategrey", 
                                  .$WorkingPlatoon == 3 ~ "slategrey"))
     
     workplatoonL2 <- workplatoonL2 %>% 
         select(-HoursAmount) %>% 
-        spread(WorkingPlatoon, Amount) %>%
+        spread(WorkingPlatoon, Amount, drop = FALSE, fill = 0) %>%
         rename(FirstPlatoon = `1`, 
                SecondPlatoon = `2`, 
                ThirdPlatoon = `3`)
@@ -357,7 +359,7 @@ if(numofslips == 0) {
                    barmode = "stack",
                    hovermode = "y",
                    xaxis = list(title = "", exponentformat = "none"),
-                   yaxis = list(title = "", exponentformat = "none"))
+                   yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
         
         p
         
