@@ -156,7 +156,500 @@ allotments <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budget
 
 ```
 
-Overview
+Overview - Dollars
+=====================================================================================
+
+Column {data-width=500 .tabset}
+-----------------------------------------------------------------------
+
+### Budgeted
+
+```{r}
+
+
+if(numofslips == 0) {
+    meetbudget <- CostCentersSelected %>%
+        select(Allotment) %>%
+        filter(CostCenter == params$CostCenterName) %>% 
+        mutate(AmountSpent = 0,
+               CostCenter = fct_relevel(CostCenter),
+               Budget = Budget) %>%
+        as.data.frame()
+} else {
+    
+    LevelTwoAllotments <- CostCentersSelected %>% 
+        group_by(LevelThree) %>% 
+        summarise(LevelThreeAllotment = sum(Allotment, na.rm = TRUE)) %>%
+        mutate(LevelThree = case_when(is.na(.$LevelThree) ~ "OTHER",
+                                    TRUE ~ .$LevelThree))
+    
+    meetbudget2 <- otdata %>%
+        group_by(LevelThree) %>%
+        summarise(AmountSpent = sum(OvertimeAmount)) %>%
+        left_join(allotments, by = "LevelThree") %>%
+        mutate(LevelThree = as.factor(LevelThree))
+    
+    meetbudget2Total <- data.frame(
+        AmountSpent = sum(meetbudget2$AmountSpent, na.rm = TRUE),
+        Allotment = sum(meetbudget2$LevelThreeAllotment, na.rm = TRUE)
+        )
+    
+    }
+
+p <- plot_ly(
+    data = meetbudget2Total,
+    x = ~AmountSpent,
+    y = ~Allotment,
+    type = "bar",
+    name = "AllottedTotal",
+    marker = list(color = "blue"),
+    showlegend = FALSE) %>%
+    add_trace(y = ~AmountSpent, 
+              name = "SpentTotal", 
+              showlegend = FALSE, 
+              marker = list(color = "red")) %>%
+    layout(xaxis = list(title = ""),
+           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
+           barmode = "group",
+           margin = list(l = 75),
+           hovermode = "closest")
+
+q <- plot_ly(
+    data = meetbudget2,
+    x = ~LevelThree,
+    y = ~LevelThreeAllotment,
+    type = "bar",
+    name = "Allotted",
+    marker = list(color = "blue")) %>%
+    add_trace(y = ~AmountSpent, name = "Spent", marker = list(color = "red")) %>%
+    layout(xaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
+           margin = list(l = 75),
+           barmode = "group",
+           hovermode = "closest")
+
+subplot(p, q, nrows = 2)
+    
+```
+
+### Comp vs Money
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No overtime spent")
+} else {
+    type <- otdata %>%
+        group_by(Type) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        mutate(Type = factor(Type, levels = c("Cash", "Comp"))) %>%
+        complete(Type, fill = list(Amount = 0)) %>%
+        mutate(color = case_when(.$Type == "Cash" ~ "forestgreen",
+                                 .$Type == "Comp" ~ "darkgrey"))
+    typebyLevelThree <- otdata %>%
+        group_by(Type, LevelThree) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        spread(Type, Amount)
+    
+    p <- plot_ly(
+        data = type,
+        x = ~Type,
+        y = ~Amount,
+        name = "Dollars",
+        showlegend = FALSE,
+        type = "bar",
+        marker = list(color = ~color)) %>%
+        layout(hovermode = "closest",
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none", prefix = "$"),
+               margin = list(l = 75))
+    q <- plot_ly(
+        data = typebyLevelThree,
+        x = ~LevelThree,
+        y = ~Cash,
+        type = "bar",
+        name = "Cash",
+        marker = list(color = "forestgreen")) %>%
+        add_trace(y = ~Comp,
+                  name = "Comp",
+                  marker = list(color = "darkgrey")) %>%
+        layout(barmode = "group",
+               yaxis = list(prefix = "$", exponentformat = "none"),
+               margin = list(l = 75))
+    
+    subplot(p, q, nrows = 2)
+    }
+
+```
+
+### Working Platoon
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    
+    workplatoonCostCenter <- otdata %>%
+        mutate(WorkingPlatoon = as.factor(WorkingPlatoon)) %>%
+        group_by(WorkingPlatoon, LevelThree) %>%
+        summarise(Amount = sum(OvertimeAmount),
+                  HoursAmount = sum(OvertimeHours)) %>%
+        filter(!is.na(WorkingPlatoon)) # Ditching NA values
+    
+    workplatoon <- workplatoonCostCenter %>%
+        group_by(WorkingPlatoon) %>%
+        summarize(Amount = sum(Amount),
+                  HoursAmount = sum(HoursAmount)) %>%
+        mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
+                                 .$WorkingPlatoon == 2 ~ "lightslategrey", 
+                                 .$WorkingPlatoon == 3 ~ "slategrey"))
+    
+    workplatoonCostCenter <- workplatoonCostCenter %>% 
+        select(-HoursAmount) %>% 
+        spread(WorkingPlatoon, Amount) %>%
+        rename(FirstPlatoon = `1`, 
+               SecondPlatoon = `2`, 
+               ThirdPlatoon = `3`)
+    
+    p <- plot_ly(
+        data = workplatoon,
+        x = ~WorkingPlatoon,
+        y = ~Amount,
+        showlegend = FALSE,
+        name = "Platoons",
+        type = "bar",
+        text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours.")) %>%
+        layout(xaxis = list(title = ""),
+               yaxis = list(title = "", 
+                            exponentformat = "none"))
+    
+    q <- plot_ly(
+        data = workplatoonCostCenter,
+        x = ~LevelThree,
+        y = ~FirstPlatoon,
+        type = "bar",
+        name = "FirstPlatoon",
+        marker = list(color = "lightgrey")) %>%
+        add_trace(y = ~SecondPlatoon,
+                  name = "SecondPlatoon",
+                  marker = list(color = "lightslategrey")) %>%
+        add_trace(y = ~ThirdPlatoon,
+                  name = "ThirdPlatoon",
+                  marker = list(color = "slategrey")) %>%
+        layout(yaxis = list(title = "", 
+                            barmode = "group", 
+                            exponentformat = "none"))
+
+    subplot(p, q, nrows = 2)
+    }
+
+```
+
+Column {data-width=500 .tabset}
+-----------------------------------------------------------------------
+
+### Top Project Codes
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+    } else if(nrow(otdata %>% 
+                   filter(ProjectCodeFactor != "No Project Code Specified")) == 0) {
+        cat("No project codes specified")
+    } else {
+    
+    projectcodes <- otdata %>%
+        filter(ProjectCodeFactor != "No Project Code Specified") %>%
+        group_by(ProjectCodeFactor, LevelThree) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        arrange(desc(Amount)) %>%
+        top_n(n = 10, wt = Amount) %>%
+        ungroup() %>%
+        mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, Amount)) %>%
+        spread(LevelThree, Amount, fill = 0) %>%
+        mutate(sumCC = rowSums(select(., -ProjectCodeFactor), na.rm = TRUE)) %>%
+        arrange(desc(sumCC)) %>%
+        top_n(n = 10, wt = sumCC) %>%
+        mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, sumCC)) %>% # drop unused factor levels
+        select(-contains("`<NA>`")) %>%
+        as.data.frame()
+    
+    p <- plot_ly(
+        data = projectcodes,
+        x = projectcodes[, 2],
+        y = ~ProjectCodeFactor,
+        name = names(projectcodes)[2],
+        type = "bar",
+        orientation = "h")
+    
+    for(i in 3:(ncol(projectcodes) - 1)) {
+        p <- add_trace(
+            p,
+            x = projectcodes[, i],
+            y = ~ProjectCodeFactor,
+            name = names(projectcodes)[i])
+    }
+    
+    p <- p %>%
+        layout(margin = list(l = 200),
+               barmode = "stack",
+               hovermode = "y",
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none"))
+    
+    p
+    }
+
+```
+
+### Top Activity Types
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    activitytypes <- otdata %>%
+        group_by(ActivityGrouping, LevelThree) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        mutate(Amount = replace(Amount, is.na(Amount), 0)) %>% # replace NA values with 0
+        spread(key = LevelThree, value = Amount, fill = 0) %>%
+        ungroup() %>% 
+        mutate(sumCC = rowSums(select(., one_of(CostCentersSelected$LevelThree)))) %>% # sumCC sums up the columns with names of cost centers
+        select(-`<NA>`) %>%
+        as.data.frame()
+
+    p <- plot_ly(
+        data = activitytypes,
+        y = ~ActivityGrouping,
+        x = activitytypes[,2],
+        type = "bar",
+        name = names(activitytypes)[2],
+        orientation = "h")
+    
+    for (i in 3:(ncol(activitytypes) - 1)) {
+        p <- add_trace(
+            p,
+            x = activitytypes[, i],
+            y = ~ActivityGrouping,
+            name = names(activitytypes)[i])
+    }
+    
+    p <- p %>%
+        layout(margin = list(l = 200),
+               barmode = "stack",
+               hovermode = "y",
+               xaxis = list(title = "", exponentformat = "none"),
+               yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
+    
+    p
+    }
+    
+```
+
+
+### Top Earners
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    earners <- otdata %>%
+        group_by(PersonnelName_New, LevelThree) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        arrange(desc(Amount)) %>%
+        top_n(10) %>% 
+        ungroup() %>%
+        group_by(LevelThree) %>%
+        top_n(n = 3, wt = Amount) %>% 
+        arrange(desc(Amount)) %>%
+        filter(LevelThree != "<NA>") %>%
+        mutate_if(is.character, as.factor)
+    earners$PersonnelName_New <- factor(earners$PersonnelName_New,
+                                        levels = earners$PersonnelName_New)
+
+    p <- plot_ly(
+        data = earners,
+        x = ~Amount,
+        y = ~PersonnelName_New,
+        type = "bar",
+        orientation = "h",
+        color = ~LevelThree) %>%
+        layout(margin = list(l = 200),
+               barmode = "stack",
+               hovermode = "y",
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
+    
+    p
+    }
+
+```
+
+Column {data-width=500 .tabset}
+-----------------------------------------------------------------------
+
+### Time, by Fiscal Year Pay Period
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    
+    payperiod <- otdata %>%
+        group_by(PayPeriod, LevelThree) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        complete(PayPeriod, fill = list(Amount = 0)) %>%
+        arrange(PayPeriod) %>%
+        left_join(payperiod2017lookup %>% # get the firstdate and lastdate in there
+                      select(-Date) %>% 
+                      distinct(),
+                  by = "PayPeriod") %>%
+        spread(LevelThree, Amount, fill = 0) %>%
+        left_join(otdata %>% group_by(PayPeriod) %>% summarise(TotalAmount = sum(OvertimeAmount)),
+                  by = "PayPeriod") # Instead of doing rowSums - don't need to know CostCenter names this way
+
+# Need a way to get the unused payperiods in there
+    
+    plotpayperiod <- anti_join(payperiod2017lookup, payperiod, by = "PayPeriod") %>%
+        select(-Date) %>%
+        distinct() %>%
+        mutate(TotalAmount = 0) %>%
+        bind_rows(payperiod) %>%
+        arrange(PayPeriod)
+    
+    plotpayperiod[, 5:ncol(plotpayperiod)][is.na(plotpayperiod[, 5:ncol(plotpayperiod)])] <- 0
+    
+    p <- plot_ly(
+        data = plotpayperiod,
+        x = ~as.factor(PayPeriod),
+        y = ~TotalAmount,
+        name = "Total",
+        type = "scatter",
+        mode = "lines",
+        text = paste0("$",
+                      plotpayperiod$TotalAmount,
+                      " spent from ",
+                      plotpayperiod$firstdate,
+                      " to ",
+                      plotpayperiod$lastdate))
+    
+    for (i in 5:ncol(plotpayperiod)) {
+        p <- add_trace(
+            p,
+            y = plotpayperiod[, i],
+            name = names(plotpayperiod)[i],
+            visible = "legendonly",
+            text = paste0("$",
+                          plotpayperiod[, i],
+                          " spent from ",
+                          plotpayperiod$firstdate,
+                          " to ",
+                          plotpayperiod$lastdate))
+    }
+    p <- p %>%
+        layout(hovermode = "closest",
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none"))
+    
+    p
+    }
+
+```
+
+### Time, By Day
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+        
+    byday <- otdata %>%
+        group_by(OTDate, LevelThree) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        arrange(desc(Amount))
+    bydaytotal <- byday %>% 
+        group_by(OTDate) %>% 
+        summarise(TotalAmount = sum(Amount))
+    
+    q <- plot_ly(
+        data = byday,
+        x = ~OTDate,
+        y = ~Amount,
+        text = paste0("$", byday$Amount, " spent on ", byday$OTDate),
+        color = ~LevelThree) %>%
+        layout(hovermode = "closest",
+               yaxis = list(title = "", 
+                            exponentformat = "none"),
+               xaxis = list(title = ""))
+    
+    #subplot(p, q, nrows = 2)
+    q
+    }
+
+```
+
+### Top Days
+
+```{r}
+
+if(numofslips == 0) {
+    cat("No OT worked.")
+} else {
+    
+    # Top 10 days overall, for stacked bar chart
+    topdates <- otdata %>%
+                   group_by(OTDate) %>%
+                   summarise(Amount = sum(OvertimeAmount)) %>%
+                   top_n(10, wt = Amount) %>%
+                   .$OTDate
+    topdays2 <- otdata %>%
+        filter(OTDate %in% topdates) %>%
+        group_by(OTDate, LevelThree) %>%
+        summarise(Amount = sum(OvertimeAmount)) %>%
+        ungroup() %>%
+        spread(LevelThree, Amount, fill = 0) %>%
+        mutate(sumCC = rowSums(select(., -OTDate), na.rm = TRUE)) %>%
+        arrange(desc(sumCC)) %>%
+        mutate(OTDate = factor(OTDate)) %>%
+        mutate(OTDate = factor(OTDate, levels = OTDate)) %>%
+        select(-`<NA>`) %>%
+        as.data.frame()
+    
+    p <- plot_ly(
+        data = topdays2,
+        x = topdays2[, 2], # Start at column 2, since column 1 is OTDate
+        y = ~OTDate,
+        name = names(topdays2)[2],
+        type = "bar",
+        orientation = "h")
+    
+    # Add a trace for each Cost Center
+    for(i in 3:(ncol(topdays2) - 1)) { # Stop before you reach the TotalSum column
+        p <- add_trace(
+            p,
+            x = topdays2[, i],
+            y = topdays2$OTDate,
+            name = names(topdays2)[i])
+    }
+    p <- p %>%
+        layout(barmode = "stack",
+               margin = list(l = 200),
+               yaxis = list(autorange = "reversed", title = ""),
+               xaxis = list(exponentformat = "none"))
+    
+    p
+    
+    }
+
+```
+
+Overview - Hours
 =====================================================================================
 
 Column {data-width=500 .tabset}

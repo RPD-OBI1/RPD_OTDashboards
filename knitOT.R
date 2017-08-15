@@ -2,6 +2,9 @@ start <- Sys.time()
 
 library(tidyverse)
 library(rmarkdown)
+#library(checkpoint); checkpoint(snapshotDate = "2017-08-15")
+# https://www.r-bloggers.com/reproducibility-a-cautionary-tale-from-data-journalism/
+
 
 # Function for first-level dashboard template
 
@@ -45,9 +48,11 @@ hierarchy <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets
            LevelTwo = `2nd Level`,
            LevelThree = `3rd Level`,
            LevelFour = `4th Level`) %>%
-    filter(! is.na(CostCenter) & ! CostCenter %in% ditchTheseCostCenters) %>%
+    filter(! is.na(CostCenter) | 
+               ! CostCenter %in% ditchTheseCostCenters) %>%
     mutate(Allotment = gsub(Allotment, pattern = ",", replacement = "") %>%
-               as.numeric())
+               as.numeric()) %>%
+    filter(! is.na(Allotment))
 
 LevelTwos <- hierarchy %>%
     select(LevelTwo) %>%
@@ -80,7 +85,7 @@ for (i in seq(LevelThrees)) {
 }
 
 rmarkdown::render("Z:/Projects/dashboard/RPDOvertimeDashboard/OT_repo/RPD_OTDashboards/FourthLevel_OTdashboard.RMD",
-                  params = list(StartDate = as.Date("2017-07-01")), 
+                  params = list(StartDate = as.Date("2017-07-01")),
                   output_file = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/FourthLevel/FourthLevel_OTdashboard.html")
 
 end <- Sys.time()

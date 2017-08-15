@@ -9,7 +9,7 @@ output:
 params:
     CostCenterName:
         label: "CostCenter"
-        value: "APND"
+        value: "ANIMAL"
     StartDate:
         value: !r as.Date("2017-07-01")
 
@@ -490,7 +490,7 @@ Column {data-width=500 .tabset}
 if(numofslips == 0) {
     meetbudget <- allotments %>% 
         filter(CostCenter == params$CostCenterName) %>% 
-        mutate(AmountSpent = 0,
+        mutate(HoursWorked = 0,
                CostCenter = fct_relevel(CostCenter),
                Budget = Allotment) %>%
         as.data.frame()
@@ -781,14 +781,14 @@ if(numofslips == 0) {
 } else {
     topdays <- otdata %>%
         group_by(OTDate) %>%
-        summarise(Amount = sum(Overtime)) %>%
-        arrange(desc(Amount)) %>%
+        summarise(HoursWorked = sum(OvertimeHours)) %>%
+        arrange(desc(HoursWorked)) %>%
         top_n(10) %>%
-        mutate(OTDate = fct_reorder(as.character(OTDate), Amount))
+        mutate(OTDate = fct_reorder(as.character(OTDate), HoursWorked))
     
     p <- plot_ly(
         data = topdays,
-        x = ~Amount,
+        x = ~HoursWorked,
         y = ~OTDate,
         name = "Top Days",
         type = "bar",
