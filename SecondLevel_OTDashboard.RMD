@@ -171,7 +171,8 @@ p <- plot_ly(
     marker = list(color = "blue"),
     showlegend = FALSE) %>%
     add_trace(y = ~AmountSpent, name = "SpentTotal", marker = list(color = "red"), showlegend = FALSE) %>%
-    layout(xaxis = list(title = ""),
+    layout(margin = list(l = 50),
+           xaxis = list(title = ""),
            yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
            barmode = "group",
            hovermode = "closest")
@@ -221,7 +222,7 @@ if(numofslips == 0) {
         showlegend = FALSE) %>%
         layout(hovermode = "closest",
                xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     q <- plot_ly(
         data = typebyCostCenter,
         x = ~CostCenter,
@@ -232,7 +233,8 @@ if(numofslips == 0) {
         add_trace(y = ~Comp,
                   name = "Comp",
                   marker = list(color = "darkgrey")) %>%
-        layout(barmode = "group")
+        layout(barmode = "group",
+               yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     
     subplot(p, q, nrows = 2)
     }
@@ -281,7 +283,8 @@ if(numofslips == 0) {
         text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours.")) %>%
         layout(xaxis = list(title = ""),
                yaxis = list(title = "", 
-                            exponentformat = "none"))
+                            exponentformat = "none",
+                            tickprefix = "$"))
     
     q <- plot_ly(
         data = workplatoonCostCenter,
@@ -298,7 +301,8 @@ if(numofslips == 0) {
                   marker = list(color = "slategrey")) %>%
         layout(yaxis = list(title = "", 
                             barmode = "group", 
-                            exponentformat = "none"))
+                            exponentformat = "none",
+                            tickprefix = "$"))
 
     subplot(p, q, nrows = 2)
     }
@@ -359,7 +363,7 @@ if(numofslips == 0) {
                legend = list(traceorder = "normal"),
                barmode = "stack",
                hovermode = "y",
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                yaxis = list(title = ""))
     
     p
@@ -409,7 +413,7 @@ if(numofslips == 0) {
                barmode = "stack",
                legend = list(traceorder = "normal"),
                hovermode = "y",
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -461,6 +465,7 @@ if(numofslips == 0) {
     
     p <- p %>%
         layout(yaxis = list(autorange = "reversed"),
+               xaxis = list(tickprefix = "$", exponentformat = "none"),
                legend = list(traceorder = "grouped+normal"),
                margin = list(l = 150))
 
@@ -535,8 +540,8 @@ if(numofslips == 0) {
     }
     p <- p %>%
         layout(hovermode = "closest",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "Pay Period"),
+               yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     
     p
     }
@@ -584,7 +589,8 @@ if(numofslips == 0) {
         color = ~CostCenter) %>%
         layout(hovermode = "closest",
                yaxis = list(title = "", 
-                            exponentformat = "none"),
+                            exponentformat = "none",
+                            tickprefix = "$"),
                xaxis = list(title = ""))
     
     #subplot(p, q, nrows = 2)
@@ -641,7 +647,7 @@ if(numofslips == 0) {
         layout(barmode = "stack",
                margin = list(l = 200),
                yaxis = list(autorange = "reversed", title = ""),
-               xaxis = list(exponentformat = "none"))
+               xaxis = list(exponentformat = "none", tickprefix = "$"))
     
     p
     
@@ -692,7 +698,7 @@ p <- plot_ly(
     showlegend = FALSE) %>%
     add_trace(y = ~AmountWorked, name = "WorkedTotal", marker = list(color = "red"), showlegend = FALSE) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "Hours", exponentformat = "none"),
            barmode = "group",
            hovermode = "closest")
   
@@ -705,7 +711,7 @@ q <- plot_ly(
     marker = list(color = "blue")) %>%
     add_trace(y = ~AmountWorked, name = "Worked", marker = list(color = "red")) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "Hours", exponentformat = "none"),
            barmode = "group",
            hovermode = "closest")
 
@@ -980,6 +986,7 @@ if(numofslips == 0) {
 
     p <- p %>%
         layout(yaxis = list(autorange = "reversed"),
+               xaxis = list(title = "Hours"),
                legend = list(traceorder = "grouped"),
                margin = list(l = 150))
     p
@@ -1052,7 +1059,7 @@ if(numofslips == 0) {
     }
     p <- p %>%
         layout(hovermode = "closest",
-               xaxis = list(title = "Payperiod"),
+               xaxis = list(title = "Pay Period"),
                yaxis = list(title = "Hours", exponentformat = "none"))
     
     p
@@ -1107,7 +1114,7 @@ if(numofslips == 0) {
         marker = list(color = ~color)
         ) %>%
         layout(hovermode = "closest",
-               yaxis = list(title = "", 
+               yaxis = list(title = "Hours", 
                             exponentformat = "none"),
                xaxis = list(title = ""))
     

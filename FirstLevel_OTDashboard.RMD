@@ -186,7 +186,7 @@ p <- plot_ly(
     marker = list(color = "blue")) %>%
     add_trace(y = ~AmountSpent, name = "Spent", marker = list(color = "red")) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
            barmode = "group",
            hovermode = "closest")
 
@@ -218,7 +218,7 @@ if(numofslips == 0) {
         marker = list(color = ~color)) %>%
         layout(hovermode = "closest",
                xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     
     p
     }
@@ -249,11 +249,12 @@ if(numofslips == 0) {
         x = ~WorkingPlatoon,
         y = ~Amount,
         type = "bar",
+        hoverinfo = "text",
         text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours."),
         opacity = .5,
         marker = list(color = ~color)) %>%
         layout(xaxis = list(title = ""),
-               yaxis = list(title = ""))
+               yaxis = list(title = "", tickprefix = "$"))
     p
     }
 
@@ -289,7 +290,7 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = ""),
+               xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                yaxis = list(title = "", exponentformat = "none"))
     p
     }
@@ -320,7 +321,7 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     p
     }
@@ -355,7 +356,7 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = ""),
+               xaxis = list(title = "", tickprefix = "$"),
                yaxis = list(title = "", exponentformat = "none"))
     
     p
@@ -397,6 +398,7 @@ plotpayperiod <- anti_join(payperiod2017lookup, payperiod, by = "PayPeriod") %>%
         y = ~Amount,
         type = "scatter",
         mode = "lines",
+        hoverinfo = "text",
         text = paste0("$", 
                       plotpayperiod$Amount, 
                       " spent from ", 
@@ -404,8 +406,8 @@ plotpayperiod <- anti_join(payperiod2017lookup, payperiod, by = "PayPeriod") %>%
                       " to ", 
                       plotpayperiod$lastdate)) %>%
         layout(hovermode = "closest",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "Pay Period"),
+               yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     
     p
     }
@@ -429,11 +431,13 @@ if(numofslips == 0) {
         data = byday,
         x = ~OTDate,
         y = ~Amount,
+        hoverinfo = "text",
         text = paste0("$", byday$Amount, " spent on ", byday$OTDate)
     ) %>%
         layout(hovermode = "closest",
                yaxis = list(title = "", 
-                            exponentformat = "none"),
+                            exponentformat = "none",
+                            tickprefix = "$"),
                xaxis = list(title = "",
                             tickmode = "array"
                             #dtick = 1000 * 60 * 60 * 24 * 90
@@ -469,7 +473,8 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 100),
                hovermode = "y",
-               yaxis = list(title = ""))
+               yaxis = list(title = ""),
+               xaxis = list(exponentformat = "none", tickprefix = "$"))
     
     p
     }
@@ -513,7 +518,7 @@ p <- plot_ly(
     marker = list(color = "blue")) %>%
     add_trace(y = ~HoursWorked, name = "Used", marker = list(color = "red")) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "Hours", exponentformat = "none"),
            barmode = "group",
            hovermode = "closest")
 
@@ -545,7 +550,7 @@ if(numofslips == 0) {
         marker = list(color = ~color)) %>%
         layout(hovermode = "closest",
                xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               yaxis = list(title = "Hours", exponentformat = "none"))
     
     p
     }
@@ -580,7 +585,8 @@ if(numofslips == 0) {
         opacity = .5,
         marker = list(color = ~color)) %>%
         layout(xaxis = list(title = ""),
-               yaxis = list(title = ""))
+               hovermode = "y",
+               yaxis = list(title = "Hours", exponentformat = "none"))
     p
     }
 
@@ -616,8 +622,8 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "Hours", exponentformat = "none"),
+               yaxis = list(title = ""))
     p
     }
 
@@ -645,9 +651,9 @@ if(numofslips == 0) {
         x = ~Amount,
         type = "bar",
         orientation = "h") %>%
-        layout(margin = list(l = 200),
+        layout(margin = list(l = 150),
                hovermode = "y",
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "Hours", exponentformat = "none"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     p
     }
@@ -682,7 +688,7 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = ""),
+               xaxis = list(title = "Hours"),
                yaxis = list(title = "", exponentformat = "none"))
     
     p
@@ -724,14 +730,15 @@ plotpayperiod <- anti_join(payperiod2017lookup, payperiod, by = "PayPeriod") %>%
         y = ~Amount,
         type = "scatter",
         mode = "lines",
+        hoverinfo = "text",
         text = paste0(plotpayperiod$Amount, 
                       " hours worked from ", 
                       plotpayperiod$firstdate, 
                       " to ", 
                       plotpayperiod$lastdate)) %>%
         layout(hovermode = "closest",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "Payperiod"),
+               yaxis = list(title = "Hours", exponentformat = "none"))
     
     p
     }
@@ -755,10 +762,11 @@ if(numofslips == 0) {
         data = byday,
         x = ~OTDate,
         y = ~Amount,
+        hoverinfo = "text",
         text = paste0(byday$Amount, " hours worked on ", byday$OTDate)
     ) %>%
         layout(hovermode = "closest",
-               yaxis = list(title = "", 
+               yaxis = list(title = "Hours", 
                             exponentformat = "none"),
                xaxis = list(title = "",
                             tickmode = "array"
@@ -795,7 +803,8 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 100),
                hovermode = "y",
-               yaxis = list(title = ""))
+               yaxis = list(title = ""),
+               xaxis = list(title = "Hours"))
     
     p
     }

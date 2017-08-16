@@ -73,9 +73,10 @@ CostCentersSelected <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY17
     filter(LevelThree == params$LevelThreeName) %>%
     mutate(Allotment = gsub(Allotment, pattern = ",", replacement = "") %>%
                as.numeric(),
+           AllottedHours = Allotment / 77,
            LevelTwo = case_when(is.na(.$LevelTwo) ~ "OTHER",
                                 TRUE ~ .$LevelTwo)) %>%
-    select(CostCenter, Allotment, LevelTwo)
+    select(CostCenter, Allotment, AllottedHours, LevelTwo)
 
 otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
     rename(CostCenter = `Cost Center`,
@@ -135,13 +136,7 @@ Column {data-width=500 .tabset}
 ```{r}
 
 if(numofslips == 0) {
-    meetbudget <- CostCentersSelected %>%
-        select(Allotment) %>%
-        filter(CostCenter == params$CostCenterName) %>% 
-        mutate(AmountSpent = 0,
-               CostCenter = fct_relevel(CostCenter),
-               Budget = Budget) %>%
-        as.data.frame()
+    cat("No overtime slips.")
 } else {
     
     LevelTwoAllotments <- CostCentersSelected %>% 
@@ -225,7 +220,7 @@ if(numofslips == 0) {
         marker = list(color = ~color)) %>%
         layout(hovermode = "closest",
                xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none", prefix = "$"),
+               yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                margin = list(l = 75))
     q <- plot_ly(
         data = typebyLevelTwo,
@@ -238,7 +233,7 @@ if(numofslips == 0) {
                   name = "Comp",
                   marker = list(color = "darkgrey")) %>%
         layout(barmode = "group",
-               yaxis = list(prefix = "$", exponentformat = "none"),
+               yaxis = list(tickprefix = "$", exponentformat = "none"),
                margin = list(l = 75))
     
     subplot(p, q, nrows = 2)
@@ -282,12 +277,14 @@ if(numofslips == 0) {
         x = ~WorkingPlatoon,
         y = ~Amount,
         name = "Platoons",
+        showlengend = FALSE,
         type = "bar",
         marker = list(color = ~color),
         text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours.")) %>%
         layout(xaxis = list(title = ""),
                yaxis = list(title = "", 
-                            exponentformat = "none"))
+                            exponentformat = "none",
+                            tickprefix = "$"))
     
     q <- plot_ly(
         data = workplatoonL2,
@@ -304,7 +301,8 @@ if(numofslips == 0) {
                   marker = list(color = "slategrey")) %>%
         layout(yaxis = list(title = "", 
                             barmode = "group", 
-                            exponentformat = "none"))
+                            exponentformat = "none",
+                            tickprefix = "$"))
 
     subplot(p, q, nrows = 2)
     }
@@ -358,7 +356,7 @@ if(numofslips == 0) {
             layout(margin = list(l = 200),
                    barmode = "stack",
                    hovermode = "y",
-                   xaxis = list(title = "", exponentformat = "none"),
+                   xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                    yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
         
         p
@@ -400,7 +398,7 @@ if(numofslips == 0) {
             layout(margin = list(l = 200),
                    barmode = "stack",
                    hovermode = "y",
-                   xaxis = list(title = "", exponentformat = "none"),
+                   xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                    yaxis = list(title = "", exponentformat = "none"))
         
         p
@@ -442,7 +440,7 @@ if(numofslips == 0) {
                barmode = "stack",
                hovermode = "y",
                legend = list(yanchor = "top"),
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -477,7 +475,7 @@ if(numofslips == 0) {
                barmode = "stack",
                hovermode = "y",
                legend = list(yanchor = "top"),
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -514,7 +512,7 @@ if(numofslips == 0) {
         color = ~LevelTwo) %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -588,8 +586,8 @@ if(numofslips == 0) {
     }
     p <- p %>%
         layout(hovermode = "closest",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "Pay Period"),
+               yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     
     p
 } else {
@@ -646,8 +644,8 @@ if(numofslips == 0) {
     }
     p <- p %>%
         layout(hovermode = "closest",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "Pay Period"),
+               yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     
     p
 }
@@ -677,7 +675,8 @@ if(numofslips == 0) {
         color = ~CostCenter) %>%
         layout(hovermode = "closest",
                yaxis = list(title = "", 
-                            exponentformat = "none"),
+                            exponentformat = "none", 
+                            tickprefix = "$"),
                xaxis = list(title = ""))
     
     q
@@ -699,7 +698,8 @@ if(numofslips == 0) {
         color = ~LevelTwo) %>%
         layout(hovermode = "closest",
                yaxis = list(title = "", 
-                            exponentformat = "none"),
+                            exponentformat = "none",
+                            tickprefix = "$"),
                xaxis = list(title = ""))
     
     #subplot(p, q, nrows = 2)
@@ -750,7 +750,7 @@ if(numofslips == 0) {
         layout(barmode = "stack",
                margin = list(l = 200),
                yaxis = list(autorange = "reversed"),
-               xaxis = list(exponentformat = "none"))
+               xaxis = list(exponentformat = "none", tickprefix = "$"))
     
     p
 
@@ -794,7 +794,7 @@ if(numofslips == 0) {
         layout(barmode = "stack",
                margin = list(l = 200),
                yaxis = list(autorange = "reversed", title = ""),
-               xaxis = list(exponentformat = "none"))
+               xaxis = list(exponentformat = "none", tickprefix = "$"))
     
     p
     
@@ -814,21 +814,14 @@ Column {data-width=500 .tabset}
 ```{r}
 
 if(numofslips == 0) {
-    meetbudget <- CostCentersSelected %>%
-        select(Allotment) %>%
-        filter(CostCenter == params$CostCenterName) %>% 
-        mutate(HoursWorked = 0,
-               CostCenter = fct_relevel(CostCenter),
-               Budget = Budget) %>%
-        as.data.frame()
+    cat("No overtime slips.")
 } else {
     
     LevelTwoAllotments <- CostCentersSelected %>% 
         group_by(LevelTwo) %>% 
-        summarise(LevelTwoAllotment = sum(Allotment, na.rm = TRUE)) %>%
+        summarise(LevelTwoAllotment = sum(AllottedHours, na.rm = TRUE)) %>%
         mutate(LevelTwo = case_when(is.na(.$LevelTwo) ~ "OTHER",
                                     TRUE ~ .$LevelTwo))
-    
     
     meetbudget2 <- otdata %>%
         group_by(LevelTwo) %>%
@@ -840,7 +833,7 @@ if(numofslips == 0) {
     meetbudget2Total <- data.frame(
         LevelThree = params$LevelThreeName,
         HoursWorked = sum(meetbudget2$HoursWorked, na.rm = TRUE),
-        Allotment = sum(meetbudget2$LevelTwoAllotment, na.rm = TRUE)
+        AllottedHours = sum(meetbudget2$LevelTwoAllotment, na.rm = TRUE)
         )
     
     }
@@ -848,14 +841,14 @@ if(numofslips == 0) {
 p <- plot_ly(
     data = meetbudget2Total,
     x = ~LevelThree,
-    y = ~Allotment,
+    y = ~AllottedHours,
     type = "bar",
     name = "AllottedTotal",
     marker = list(color = "blue"),
     showlegend = FALSE) %>%
-    add_trace(y = ~HoursWorked, name = "HoursTotal", marker = list(color = "red"), showlegend = FALSE) %>%
+    add_trace(y = ~HoursWorked, name = "HoursWorked", marker = list(color = "red"), showlegend = FALSE) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none"),
+           yaxis = list(title = "Hours", exponentformat = "none"),
            barmode = "group",
            hovermode = "closest")
 
@@ -866,9 +859,9 @@ q <- plot_ly(
     type = "bar",
     name = "Allotted",
     marker = list(color = "blue")) %>%
-    add_trace(y = ~HoursWorked, name = "Spent", marker = list(color = "red")) %>%
+    add_trace(y = ~HoursWorked, name = "Worked", marker = list(color = "red")) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
+           yaxis = list(title = "Hours", exponentformat = "none"),
            barmode = "group",
            hovermode = "closest")
 
@@ -903,7 +896,7 @@ if(numofslips == 0) {
         type = "bar",
         marker = list(color = ~color)) %>%
         layout(hovermode = "closest",
-               xaxis = list(title = ""),
+               xaxis = list(title = "Hours"),
                yaxis = list(title = "", exponentformat = "none"),
                margin = list(l = 75))
     q <- plot_ly(
@@ -917,7 +910,7 @@ if(numofslips == 0) {
                   name = "Comp",
                   marker = list(color = "darkgrey")) %>%
         layout(barmode = "group",
-               yaxis = list( exponentformat = "none"),
+               yaxis = list(title = "Hours", exponentformat = "none"),
                margin = list(l = 75))
     
     subplot(p, q, nrows = 2)
@@ -967,7 +960,7 @@ if(numofslips == 0) {
         marker = list(color = ~color),
         text = paste0("$", workplatoon$Amount, " spent on ", workplatoon$HoursAmount, " hours.")) %>%
         layout(xaxis = list(title = ""),
-               yaxis = list(title = "", 
+               yaxis = list(title = "Hours", 
                             exponentformat = "none"))
     
     q <- plot_ly(
@@ -983,7 +976,7 @@ if(numofslips == 0) {
         add_trace(y = ~ThirdPlatoon,
                   name = "ThirdPlatoon",
                   marker = list(color = "slategrey")) %>%
-        layout(yaxis = list(title = "", 
+        layout(yaxis = list(title = "Hours", 
                             barmode = "group", 
                             exponentformat = "none"))
 
@@ -1080,7 +1073,7 @@ if(numofslips == 0) {
             layout(margin = list(l = 200),
                    barmode = "stack",
                    hovermode = "y",
-                   xaxis = list(title = "", exponentformat = "none"),
+                   xaxis = list(title = "Hours", exponentformat = "none"),
                    yaxis = list(title = "", exponentformat = "none"))
         
         p
@@ -1122,7 +1115,7 @@ if(numofslips == 0) {
                barmode = "stack",
                hovermode = "y",
                legend = list(yanchor = "top"),
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "Hours", exponentformat = "none"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -1157,7 +1150,7 @@ if(numofslips == 0) {
                barmode = "stack",
                hovermode = "y",
                legend = list(yanchor = "top"),
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "Hours", exponentformat = "none"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     
     p
@@ -1192,7 +1185,7 @@ if(numofslips == 0) {
         color = ~LevelTwo) %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = "", exponentformat = "none"),
+               xaxis = list(title = "Hours", exponentformat = "none"),
                yaxis = list(title = "", exponentformat = "none"))
     
     p
@@ -1265,8 +1258,8 @@ if(numofslips == 0) {
     }
     p <- p %>%
         layout(hovermode = "closest",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "Pay Period"),
+               yaxis = list(title = "Hours", exponentformat = "none"))
     
     p
 } else {
@@ -1322,8 +1315,8 @@ if(numofslips == 0) {
     }
     p <- p %>%
         layout(hovermode = "closest",
-               xaxis = list(title = ""),
-               yaxis = list(title = "", exponentformat = "none"))
+               xaxis = list(title = "Pay Period"),
+               yaxis = list(title = "Hours", exponentformat = "none"))
     
     p
 }
@@ -1353,7 +1346,7 @@ if(numofslips == 0) {
         text = paste0(byday$HoursWorked, " hours worked on ", byday$OTDate),
         color = ~CostCenter) %>%
         layout(hovermode = "closest",
-               yaxis = list(title = "", 
+               yaxis = list(title = "Hours", 
                             exponentformat = "none"),
                xaxis = list(title = ""))
     
@@ -1376,7 +1369,7 @@ if(numofslips == 0) {
         text = paste0(byday$HoursWorked, " hours worked on ", byday$OTDate, " by ", byday$LevelTwo),
         color = ~LevelTwo) %>%
         layout(hovermode = "closest",
-               yaxis = list(title = "", 
+               yaxis = list(title = "Hours", 
                             exponentformat = "none"),
                xaxis = list(title = ""))
     
@@ -1428,7 +1421,7 @@ if(numofslips == 0) {
         layout(barmode = "stack",
                margin = list(l = 200),
                yaxis = list(autorange = "reversed"),
-               xaxis = list(exponentformat = "none"))
+               xaxis = list(exponentformat = "none", title = "Hours"))
     
     p
 
@@ -1472,7 +1465,7 @@ if(numofslips == 0) {
         layout(barmode = "stack",
                margin = list(l = 200),
                yaxis = list(autorange = "reversed", title = ""),
-               xaxis = list(exponentformat = "none"))
+               xaxis = list(exponentformat = "none", title = "Hours"))
     
     p
     
