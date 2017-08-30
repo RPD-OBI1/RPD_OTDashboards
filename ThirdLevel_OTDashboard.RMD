@@ -513,7 +513,8 @@ if(numofslips == 0) {
         layout(margin = list(l = 200),
                hovermode = "y",
                xaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
-               yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
+               yaxis = list(title = "", exponentformat = "none", autorange = "reversed"),
+               barmode = "stack")
     
     p
     }
@@ -672,6 +673,7 @@ if(numofslips == 0) {
         x = ~OTDate,
         y = ~Amount,
         text = paste0("$", byday$Amount, " spent on ", byday$OTDate),
+        hoverinfo = "text",
         color = ~CostCenter) %>%
         layout(hovermode = "closest",
                yaxis = list(title = "", 
@@ -695,6 +697,7 @@ if(numofslips == 0) {
         x = ~OTDate,
         y = ~Amount,
         text = paste0("$", byday$Amount, " spent on ", byday$OTDate),
+        hoverinfo = "text",
         color = ~LevelTwo) %>%
         layout(hovermode = "closest",
                yaxis = list(title = "", 
@@ -744,6 +747,7 @@ if(numofslips == 0) {
             p,
             x = topdays2[, i],
             y = as.factor(topdays2$OTDate),
+            name = names(topdays2)[i],
             type = "bar")
     }
     p <- p %>%
@@ -1186,7 +1190,8 @@ if(numofslips == 0) {
         layout(margin = list(l = 200),
                hovermode = "y",
                xaxis = list(title = "Hours", exponentformat = "none"),
-               yaxis = list(title = "", exponentformat = "none"))
+               yaxis = list(title = "", exponentformat = "none"),
+               barmode = "stack")
     
     p
     }
@@ -1415,6 +1420,7 @@ if(numofslips == 0) {
             p,
             x = topdays2[, i],
             y = as.factor(topdays2$OTDate),
+            name = names(topdays2)[i],
             type = "bar")
     }
     p <- p %>%

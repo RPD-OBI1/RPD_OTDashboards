@@ -9,7 +9,7 @@ output:
 params:
     LevelTwoName:
         label: "CostCenter2ndLevel"
-        value: "PATROL"
+        value: "PDS"
     StartDate:
         value: !r as.Date("2017-07-01")
 ---
@@ -467,7 +467,8 @@ if(numofslips == 0) {
         layout(yaxis = list(autorange = "reversed"),
                xaxis = list(tickprefix = "$", exponentformat = "none"),
                legend = list(traceorder = "grouped+normal"),
-               margin = list(l = 150))
+               margin = list(l = 150),
+               barmode = "stack")
 
     p
     }
@@ -988,7 +989,8 @@ if(numofslips == 0) {
         layout(yaxis = list(autorange = "reversed"),
                xaxis = list(title = "Hours"),
                legend = list(traceorder = "grouped"),
-               margin = list(l = 150))
+               margin = list(l = 150),
+               barmode = "stack")
     p
     }
 
