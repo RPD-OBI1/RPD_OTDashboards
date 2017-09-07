@@ -9,7 +9,7 @@ output:
 params:
     LevelTwoName:
         label: "CostCenter2ndLevel"
-        value: "PDS"
+        value: "GRANTS"
     StartDate:
         value: !r as.Date("2017-07-01")
 ---
@@ -95,7 +95,11 @@ otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
                                   .$CostCenter == "NSC7" ~ "SECT7",
                                   .$CostCenter == "NSC9" ~ "SECT9",
                                   TRUE ~ .$CostCenter),
-           WorkingPlatoon = factor(WorkingPlatoon, levels = c("1", "2", "3"))) %>%
+           WorkingPlatoon = case_when(.$WorkingPlatoon == 1 ~ "FirstPlatoon",
+                                      .$WorkingPlatoon == 2 ~ "SecondPlatoon", 
+                                      .$WorkingPlatoon == 3 ~ "ThirdPlatoon"),
+           WorkingPlatoon = factor(WorkingPlatoon, 
+                                   levels = c("FirstPlatoon", "SecondPlatoon", "ThirdPlatoon"))) %>%
     filter(CostCenter %in% CostCentersSelected$CostCenter,
            OTDate >= fromdate) %>%
     left_join(activitylookup, by = c("Activity" = "ActivityAbrv")) %>%
@@ -111,17 +115,28 @@ otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
            CostCenter, ProjectCodeFactor, OvertimeAmount, OvertimeHours, OvertimeRate,
            PersonnelName_New, IBM_New, Rank_New, Type, ActivityFull, ActivityGrouping)
 
-pal <- data.frame(color = brewer.pal(n = otdata %>% # Build color palette
-                                         select(CostCenter) %>% 
-                                         distinct() %>% 
-                                         nrow(),
+numdistinctCC <- otdata %>% # number of distinct costcenters
+    select(CostCenter) %>% 
+    distinct() %>% 
+    nrow()
+
+pal <- if(numdistinctCC > 2) {
+    data.frame(color = brewer.pal(n = numdistinctCC,
                                      name = "Paired"),
                   name = otdata %>% 
                       select(CostCenter) %>% 
                       distinct() %>%
                       arrange(CostCenter),
                   stringsAsFactors = FALSE)
-
+} else { #brewer.pal needs at least 3 colors to make a palette
+    data.frame(color = brewer.pal(n = 3, "Set1")[1:numdistinctCC],
+               name = otdata %>% 
+                      select(CostCenter) %>% 
+                      distinct() %>%
+                      arrange(CostCenter),
+               stringsAsFactors = FALSE)
+}
+    
 otdata <- otdata %>%
     left_join(pal, by = "CostCenter")
 
@@ -171,7 +186,7 @@ p <- plot_ly(
     marker = list(color = "blue"),
     showlegend = FALSE) %>%
     add_trace(y = ~AmountSpent, name = "SpentTotal", marker = list(color = "red"), showlegend = FALSE) %>%
-    layout(margin = list(l = 50),
+    layout(margin = list(l = 75),
            xaxis = list(title = ""),
            yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
            barmode = "group",
@@ -250,28 +265,28 @@ if(numofslips == 0) {
 } else {
     
     workplatoonCostCenter <- otdata %>%
-        mutate(WorkingPlatoon = as.factor(WorkingPlatoon)) %>%
         group_by(WorkingPlatoon, CostCenter) %>%
         summarise(Amount = sum(OvertimeAmount),
                   HoursAmount = sum(OvertimeHours)) %>%
-        filter(!is.na(WorkingPlatoon)) # Ditching NA values
+        filter(!is.na(WorkingPlatoon)) %>% # Ditching NA values
+        complete(WorkingPlatoon, # To get a trace for platoons that haven't been worked - they get 0 hours & $
+                 CostCenter, 
+                 fill = list(Amount = 0, HoursAmount = 0)) %>%
+        distinct()
     
     workplatoon <- workplatoonCostCenter %>%
         group_by(WorkingPlatoon) %>%
         summarize(Amount = sum(Amount),
                   HoursAmount = sum(HoursAmount)) %>%
         complete(WorkingPlatoon, fill = list(Amount = 0, HoursAmount = 0)) %>%
-        mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
-                                 .$WorkingPlatoon == 2 ~ "lightslategrey", 
-                                 .$WorkingPlatoon == 3 ~ "slategrey"))
+        mutate(color = case_when(.$WorkingPlatoon == "FirstPlatoon" ~ "lightgrey",
+                                 .$WorkingPlatoon == "SecondPlatoon" ~ "lightslategrey", 
+                                 .$WorkingPlatoon == "ThirdPlatoon" ~ "slategrey"))
     
     workplatoonCostCenter <- workplatoonCostCenter %>% 
         select(-HoursAmount) %>% 
-        spread(WorkingPlatoon, Amount, fill = 0) %>%
-        rename(FirstPlatoon = `1`, 
-               SecondPlatoon = `2`, 
-               ThirdPlatoon = `3`)
-    
+        spread(WorkingPlatoon, Amount, fill = 0)
+        
     p <- plot_ly(
         data = workplatoon,
         x = ~WorkingPlatoon,
@@ -433,17 +448,16 @@ if(numofslips == 0) {
         group_by(PersonnelName_New, CostCenter) %>%
         summarise(Amount = sum(OvertimeAmount)) %>%
         arrange(desc(Amount)) %>%
-        top_n(10) %>% 
         ungroup() %>%
         group_by(CostCenter) %>%
         top_n(n = 3, wt = Amount) %>% 
         arrange(desc(Amount)) %>%
         ungroup() %>%
-        mutate(PersonnelName_New = as.factor(PersonnelName_New)) %>%
         left_join(pal, by = "CostCenter") %>%
-        mutate(PersonnelName_New = fct_reorder(PersonnelName_New, Amount),
-               ShowLegend = case_when(duplicated(.$CostCenter) ~ FALSE,
-                                      TRUE ~ TRUE))
+        mutate(ShowLegend = case_when(duplicated(.$CostCenter) ~ FALSE,
+                                      TRUE ~ TRUE),
+               CostCenter = factor(CostCenter, ordered = TRUE)) %>%
+        arrange(CostCenter)
     
     p <- plot_ly(
         type = "bar",
@@ -464,9 +478,14 @@ if(numofslips == 0) {
     }
     
     p <- p %>%
-        layout(yaxis = list(autorange = "reversed"),
-               xaxis = list(tickprefix = "$", exponentformat = "none"),
-               legend = list(traceorder = "grouped+normal"),
+        layout(yaxis = list(title = "", 
+                            autorange = "reversed",
+                            categoryorder = "array",
+                            categoryarray = earners %>% arrange(desc(Amount)) %>% .$PersonnelName_New),
+               xaxis = list(title = "", 
+                            tickprefix = "$", 
+                            exponentformat = "none"),
+               legend = list(traceorder = "normal"),
                margin = list(l = 150),
                barmode = "stack")
 
@@ -541,6 +560,7 @@ if(numofslips == 0) {
     }
     p <- p %>%
         layout(hovermode = "closest",
+               margin = list(l = 75),
                xaxis = list(title = "Pay Period"),
                yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     
@@ -776,27 +796,27 @@ if(numofslips == 0) {
 } else {
     
     workplatoonCostCenter <- otdata %>%
-        mutate(WorkingPlatoon = as.factor(WorkingPlatoon)) %>%
         group_by(WorkingPlatoon, CostCenter) %>%
         summarise(Amount = sum(OvertimeAmount),
                   HoursAmount = sum(OvertimeHours)) %>%
-        filter(!is.na(WorkingPlatoon)) # Ditching NA values
+        filter(!is.na(WorkingPlatoon)) %>% # Ditching NA values
+        complete(WorkingPlatoon, # To get a trace for platoons that haven't been worked - they get 0 hours & $
+                 CostCenter, 
+                 fill = list(Amount = 0, HoursAmount = 0)) %>%
+        distinct()
     
     workplatoon <- workplatoonCostCenter %>%
         group_by(WorkingPlatoon) %>%
         summarize(Amount = sum(Amount),
                   HoursAmount = sum(HoursAmount)) %>%
         complete(WorkingPlatoon, fill = list(Amount = 0, HoursAmount = 0)) %>%
-        mutate(color = case_when(.$WorkingPlatoon == 1 ~ "lightgrey",
-                                 .$WorkingPlatoon == 2 ~ "lightslategrey", 
-                                 .$WorkingPlatoon == 3 ~ "slategrey"))
+        mutate(color = case_when(.$WorkingPlatoon == "FirstPlatoon" ~ "lightgrey",
+                                 .$WorkingPlatoon == "SecondPlatoon" ~ "lightslategrey", 
+                                 .$WorkingPlatoon == "ThirdPlatoon" ~ "slategrey"))
     
     workplatoonCostCenter <- workplatoonCostCenter %>% 
         select(-Amount) %>% 
-        spread(WorkingPlatoon, HoursAmount, fill = 0) %>%
-        rename(FirstPlatoon = `1`, 
-               SecondPlatoon = `2`, 
-               ThirdPlatoon = `3`)
+        spread(WorkingPlatoon, HoursAmount, fill = 0)
     
     p <- plot_ly(
         data = workplatoon,
@@ -955,17 +975,16 @@ if(numofslips == 0) {
         group_by(PersonnelName_New, CostCenter) %>%
         summarise(HoursWorked = sum(OvertimeHours)) %>%
         arrange(desc(HoursWorked)) %>%
-        #top_n(10) %>% 
         ungroup() %>%
         group_by(CostCenter) %>%
         top_n(n = 3, wt = HoursWorked) %>% 
         arrange(desc(HoursWorked)) %>%
         ungroup() %>%
-        mutate(PersonnelName_New = as.factor(PersonnelName_New)) %>%
         left_join(pal, by = "CostCenter") %>%
-        mutate(PersonnelName_New = fct_reorder(PersonnelName_New, HoursWorked),
-               ShowLegend = case_when(duplicated(.$CostCenter) ~ FALSE,
-                                      TRUE ~ TRUE))
+        mutate(ShowLegend = case_when(duplicated(.$CostCenter) ~ FALSE,
+                                      TRUE ~ TRUE),
+               CostCenter = factor(CostCenter, ordered = TRUE)) %>%
+        arrange(CostCenter)
     
     p <- plot_ly(
         type = "bar",
@@ -986,9 +1005,12 @@ if(numofslips == 0) {
     }
 
     p <- p %>%
-        layout(yaxis = list(autorange = "reversed"),
-               xaxis = list(title = "Hours"),
-               legend = list(traceorder = "grouped"),
+        layout(yaxis = list(autorange = "reversed",
+                            title = "",
+                            categoryorder = "array",
+                            categoryarray = earners %>% arrange(desc(HoursWorked)) %>% .$PersonnelName_New),
+               xaxis = list(title = ""),
+               legend = list(traceorder = "normal"),
                margin = list(l = 150),
                barmode = "stack")
     p

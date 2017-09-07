@@ -9,7 +9,7 @@ output:
 params:
     CostCenterName:
         label: "CostCenter"
-        value: "ANIMAL"
+        value: "RSRCH"
     StartDate:
         value: !r as.Date("2017-07-01")
 
@@ -31,41 +31,6 @@ otpath <- "Z:/Projects/dashboard/RPDOvertimeDashboard/"
 #fromdate <- as.Date("2017-07-01")
 fromdate <- params$StartDate
 todate <- Sys.Date()
-
-# Lookup dataframes
-
-# Assignment data not available yet
-
-# assignmentlookup <- data.frame(
-#     assignmentAbrv = c("ADMBUR", "ANIMAL", "APND", "B/R", "BGT", "CHF", "CIS", "DOG", "FACIT", "FVSS", "HQ", "LIC WR", "MCU", "MTD", "NAR", 
-#                        "NSC1", "NSC3", "NSC5", "NSC7", "NSC9", "PARA", "PDS", "PER", "PHOTO", "PROP", "PSS", "PTLDIV", "RE/IDU", "RSRCH",
-#                        "SECT1", "SECT3", "SECT5", "SECT7", "SECT9", "SIS", "SOS", "SP EV", "STF DY", "TACT", "TECH", "TELSER", "TR ENF", 
-#                        "TSS", "VAU", "YSS"),
-#     assignmentFull = c("AdministrativeBureau", "AnimalServices", "AutoPound", "BackgroundRecruitment", "Budget", "ChiefsOffice",
-#                        "CentralInvestigationSection", "K-9", "FACIT", "FamilyAndVictimServices", "Headquarters", "LicenseInvestigations",
-#                        "MajorCrimes", "Mounted", "Narcotics", "LakeNSC", "GeneseeNSC", "GoodmanNSC", "ClintonNSC", "CentralNSC", 
-#                        "Paralegal Unit", "ProfessionalDevelopment", "Personnel", "PhotoLab", "PropertyClerk", "ProfessionalStandardsSection",
-#                        "PatrolDivision", "RecordsID", "ResearchAndEvaluation", "LakeSection", "GeneseeSection", "GoodmanSection",
-#                        "ClintonSection", "CentralSection", "SpecialInvestigationsSection", "SpecialOperationsSection", "SpecialEvents",
-#                        "StaffDuty", "Tactical", "Technicians", "TeleServe", "TrafficEnforcement", "TechnicalServicesSection", 
-#                        "VictimAssistance", "YouthServicesSection"),
-#     stringsAsFactors = FALSE
-# )
-
-# Below method results in most pay periods having 14 days
-# But some pay periods have 13 days, some have 15 days.
-# payperiodlookup <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv"),
-#                             cols_only("Period" = col_integer(),
-#                                       "Overtime Calendar Date" = col_character()),
-#                             col_names = TRUE) %>%
-#     rename(PayPeriod = Period) %>%
-#     mutate(OTDate = as.Date(`Overtime Calendar Date`, format = "%b %d, %Y")) %>%
-#     select(PayPeriod, OTDate) %>%
-#     group_by(OTDate, PayPeriod) %>%
-#     summarise(Freq = n()) %>%
-#     ungroup(PayPeriod) %>%
-#     group_by(OTDate) %>%
-#     top_n(1, wt = Freq) # Take only the most frequently occuring payperiod per date
 
 # 2017 pay periods, done manually
 days = seq.Date(from = fromdate, to = todate, by = "days") %>%
@@ -136,17 +101,12 @@ otdata <- read_csv(paste0(otpath, "Overtime Table for Dashboards.csv")) %>%
 
 numofslips <- nrow(otdata)
 
-# allotments <- read_csv(paste0(otpath, "OTallotments.csv")) %>%
-#     select(CostCenter, Budget = `FY18 Budget`) %>%
-#     mutate(Budget = gsub(x = Budget, pattern = ",", replacement = ""),
-#            Budget = as.numeric(Budget))
-
 allotments <- read_csv("Z:/Projects/dashboard/RPDOvertimeDashboard/FY1718_Budgets.csv") %>%
     select(CostCenter = `Overtime Allotments`,
            Allotment = `FY18 Budget`) %>%
     mutate(Allotment = gsub(Allotment, pattern = ",", replacement = "") %>%
                as.numeric(),
-           AllottedHours = Allotment / 77)
+           AllottedHours = round(Allotment / 77, 1))
 
 ```
 
@@ -406,7 +366,7 @@ plotpayperiod <- anti_join(payperiod2017lookup, payperiod, by = "PayPeriod") %>%
                       " to ", 
                       plotpayperiod$lastdate)) %>%
         layout(hovermode = "closest",
-               xaxis = list(title = "Pay Period"),
+               xaxis = list(title = ""),
                yaxis = list(title = "", exponentformat = "none", tickprefix = "$"))
     
     p
@@ -518,7 +478,7 @@ p <- plot_ly(
     marker = list(color = "blue")) %>%
     add_trace(y = ~HoursWorked, name = "Used", marker = list(color = "red")) %>%
     layout(xaxis = list(title = ""),
-           yaxis = list(title = "Hours", exponentformat = "none"),
+           yaxis = list(title = "", exponentformat = "none"),
            barmode = "group",
            hovermode = "closest")
 
@@ -550,7 +510,7 @@ if(numofslips == 0) {
         marker = list(color = ~color)) %>%
         layout(hovermode = "closest",
                xaxis = list(title = ""),
-               yaxis = list(title = "Hours", exponentformat = "none"))
+               yaxis = list(title = "", exponentformat = "none"))
     
     p
     }
@@ -585,8 +545,8 @@ if(numofslips == 0) {
         opacity = .5,
         marker = list(color = ~color)) %>%
         layout(xaxis = list(title = ""),
-               hovermode = "y",
-               yaxis = list(title = "Hours", exponentformat = "none"))
+               hovermode = "closest",
+               yaxis = list(title = "", exponentformat = "none"))
     p
     }
 
@@ -622,7 +582,7 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = "Hours", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none"),
                yaxis = list(title = ""))
     p
     }
@@ -653,7 +613,7 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 150),
                hovermode = "y",
-               xaxis = list(title = "Hours", exponentformat = "none"),
+               xaxis = list(title = "", exponentformat = "none"),
                yaxis = list(title = "", exponentformat = "none", autorange = "reversed"))
     p
     }
@@ -688,7 +648,7 @@ if(numofslips == 0) {
         orientation = "h") %>%
         layout(margin = list(l = 200),
                hovermode = "y",
-               xaxis = list(title = "Hours"),
+               xaxis = list(title = ""),
                yaxis = list(title = "", exponentformat = "none"))
     
     p
@@ -737,8 +697,8 @@ plotpayperiod <- anti_join(payperiod2017lookup, payperiod, by = "PayPeriod") %>%
                       " to ", 
                       plotpayperiod$lastdate)) %>%
         layout(hovermode = "closest",
-               xaxis = list(title = "Payperiod"),
-               yaxis = list(title = "Hours", exponentformat = "none"))
+               xaxis = list(title = ""),
+               yaxis = list(title = "", exponentformat = "none"))
     
     p
     }
@@ -766,7 +726,7 @@ if(numofslips == 0) {
         text = paste0(byday$Amount, " hours worked on ", byday$OTDate)
     ) %>%
         layout(hovermode = "closest",
-               yaxis = list(title = "Hours", 
+               yaxis = list(title = "", 
                             exponentformat = "none"),
                xaxis = list(title = "",
                             tickmode = "array"
@@ -804,7 +764,7 @@ if(numofslips == 0) {
         layout(margin = list(l = 100),
                hovermode = "y",
                yaxis = list(title = ""),
-               xaxis = list(title = "Hours"))
+               xaxis = list(title = ""))
     
     p
     }
