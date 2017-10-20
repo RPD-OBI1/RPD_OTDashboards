@@ -598,7 +598,7 @@ if(numofslips == 0) {
 } else {
     activitytypes <- otdata %>%
         group_by(ActivityGrouping) %>%
-        summarise(Amount = sum(OvertimeAmount)) %>%
+        summarise(Amount = sum(OvertimeHours)) %>%
         complete(ActivityGrouping) %>% # Get all factor levels in there, even if they aren't in the data
         mutate(Amount = replace(Amount, is.na(Amount), 0)) # replace NA values with 0
         #arrange(desc(Amount)) %>%
@@ -777,8 +777,13 @@ Data
 ### View of data
 
 ```{r}
+
+otdata$OTDate <- as.character(otdata$OTDate) # to dump the scroll bar in the datatable
+
 datatable(otdata %>% 
-              select(PersonnelName_New, Rank_New, Type, OvertimeHours, OvertimeAmount, OTDate, CostCenter, ProjectCodeFactor, ActivityFull),
+              select(PersonnelName_New, Rank_New, Type, 
+                     OvertimeHours, OvertimeAmount, OTDate, 
+                     CostCenter, ProjectCodeFactor, ActivityFull),
           filter = "top", 
           rownames = FALSE,
           colnames = c("Name", "Rank", "Type", "Hours", "Amount", "Date", "Cost Center", "Project Code", "Activity Type"),

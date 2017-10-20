@@ -1,0 +1,1309 @@
+---
+title: "Overtime Dashboard, Fiscal Year-to-Date Comparisons, as of `r format(Sys.Date() - 3, '%Y/%m/%d')`"
+output: 
+  flexdashboard::flex_dashboard:
+    logo: Z:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
+    orientation: columns
+    vertical_layout: fill
+    theme: paper
+params:
+    StartDate:
+        value: !r as.Date("2017-07-01")
+---
+
+```{r setup, include=FALSE}
+
+library(flexdashboard)
+library(plotly)
+library(tidyverse)
+library(scales)
+library(DT)
+library(lubridate)
+library(reshape2)
+library(forcats)
+library(htmlwidgets) # to save plots as their own webpages
+# Read in data
+
+otpath <- "Z:/Projects/dashboard/RPDOvertimeDashboard/"
+savepath <- "//cor.local/RPD/OBI-Analytics/OT Dashboards/"
+#fromdate <- as.Date("2017-07-01")
+fromdate <- params$StartDate
+todate <- Sys.Date() - 3
+
+OT <- readRDS("//cor.local/RPD/OBI/Data/overtime/Full FY OT Data/FY0304toFY1718OTdata.RDS")
+
+tofiscalday <- data.frame(
+    date = seq.Date(from = as.Date("2016-01-01"), 
+                    to = as.Date("2016-12-31"),
+                    by = 1)
+    ) %>%
+    mutate(
+        month = month(date),
+        day = day(date),
+        fiscalday = case_when(
+            month < 7 ~ row_number(.) + 184,
+            month >= 7 ~ row_number(.) - 182
+            )
+        ) %>%
+    filter(month == month(todate) & day == day(todate)) %>%
+    select(-date)
+
+allOT <- OT %>% 
+    filter(
+        fiscalday <= tofiscalday$fiscalday & 
+            ProjectCodeFactor != "Zero Tolerance") %>% 
+    mutate(
+        month = month(OTDate),
+        year = year(OTDate)) %>%
+    mutate(
+        FiscalYear = case_when(
+            .$month %in% 1:6 ~ paste0((.$year - 1), "-", .$year),
+            .$month %in% 7:12 ~ paste0(.$year, "-", (.$year + 1))
+            ),
+        endingFiscalYear = substr(FiscalYear, start = 6, stop = 99))
+
+cashonlyOT <- allOT %>%
+    filter(Type == "Cash")
+
+currentFY <- cashonlyOT %>%
+    filter(FiscalYear == "2017-2018")
+priorFY <- cashonlyOT %>%
+    filter(FiscalYear == "2016-2017")
+
+currentpayperiod <- allOT %>%
+    select(OTDate, PayPeriodListed) %>%
+    arrange(desc(OTDate)) %>%
+    top_n(1, wt = OTDate) %>% # Pick the most current date
+    group_by(PayPeriodListed) %>%
+    count() %>% # Pick the most common pay period listed
+    .$PayPeriodListed
+```
+
+Overview - Dollars
+=====================================================================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### [Overall money spent](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ActivityPlotDollars.html)
+
+```{r}
+
+AGyeartotal <- cashonlyOT %>%
+    filter(!is.na(FiscalYear) & !is.na(ActivityGrouping)) %>%
+    group_by(FiscalYear) %>%
+    summarize(YearlyTotal = sum(OvertimeAmount))
+
+ActivityGroup <- cashonlyOT %>%
+    filter(!is.na(FiscalYear) & !is.na(ActivityGrouping)) %>%
+    group_by(FiscalYear, ActivityGrouping) %>%
+    summarize(SpentPerActivity = sum(OvertimeAmount)) %>%
+    left_join(AGyeartotal, by = c("FiscalYear" = "FiscalYear")) %>%
+    mutate(ActivityGrouping = fct_rev(ActivityGrouping),
+           FYlabel = paste0("FY", substr(FiscalYear, 3, 4), "-", substr(FiscalYear, 8, 9)))
+
+activityPlot <- plot_ly(
+    data = ActivityGroup) %>% 
+    add_trace(
+        type = "bar",
+        #mode = "stack",
+        x = ~FYlabel,
+        y = ~SpentPerActivity,
+        color = ~ActivityGrouping) %>%
+    add_trace(
+        type = "scatter",
+        mode = "markers",
+        marker = list(symbol = "line-ew"),
+        name = "FY Total",
+        showlegend = FALSE,
+        x = ~FYlabel,
+        y = ~YearlyTotal) %>%
+    layout(barmode = "stack",
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "closest",
+           yaxis = list(title = "", exponentformat = "none", tickprefix = "$"),
+           margin = list(b = 150, l = 100),
+           legend = list(traceorder = "reversed", 
+                         orientation = "h",
+                         x = 1,
+                         y = -.3))
+
+saveWidget(activityPlot, paste0(savepath, "Citywide/ComponentGraphs/ActivityPlotDollars.html"))
+
+activityPlot
+
+```
+
+
+### [Projection](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ProjectionDollars.html)
+
+```{r}
+
+prop.vals <- read.csv("//cor.local/RPD/OBI/Data/overtime/CashPropVals.csv", header = T)
+prop.vals.nc <- read.csv("//cor.local/RPD/OBI/Data/overtime/CashPropValsNONCUMULATIVE.csv", header = T)
+
+curr.year <- 2017
+
+cash <- OT %>% 
+          filter(Type == "Cash", ProjectCodeFactor != "Zero Tolerance", FiscalYear %in% 2013:curr.year) %>%
+          group_by(FiscalYear, PayPeriodListed) %>%
+          summarise(Total.Cash = sum(OvertimeAmount)) %>%
+          filter(PayPeriodListed %in% 1:26)
+
+### Necessary calculations for easy graphing
+
+cash.2013 <- cash %>% filter(FiscalYear == 2013)
+cash.2014 <- cash %>% filter(FiscalYear == 2014)
+cash.2015 <- cash %>% filter(FiscalYear == 2015)
+cash.2016 <- cash %>% filter(FiscalYear == 2016)
+cash.curr.year <- cash %>% filter(FiscalYear == 2017)
+
+total.curr.year <- sum(cash.curr.year$Total.Cash)
+curr.period <- nrow(filter(cash, FiscalYear == curr.year))
+avg.prop.now <- prop.vals$prop.vals.total[curr.period]
+
+yr.end.proj <- total.curr.year / avg.prop.now
+yr.end.budget <- 5609000 # From Nancy
+
+### Data frame to use for graphing
+
+arbitrarytargets <- data.frame(
+    FiscalYear = 2013:2016,
+    Target = c(3754400, #2013-2014 number is real
+               4042721, #2014-2015 number is real
+               4108100, #2015-2016 number is real
+               6287917), #2016-2017 number is real
+    YearEndCash = c(sum(cash.2013$Total.Cash), 
+                    sum(cash.2014$Total.Cash), 
+                    sum(cash.2015$Total.Cash), 
+                    sum(cash.2016$Total.Cash))) %>%
+    mutate(Difference = YearEndCash - Target,
+           RedOrGreen = case_when(Difference > 0 ~ "Red",
+                                  TRUE ~ "Green"),
+           PayPeriod = 26 + (row_number() * .1))
+
+df <- data.frame(PayPeriod = 0:26, 
+                 ActualCurrYear = c(0, cumsum(cash.curr.year$Total.Cash), rep(NA, times = (26 - curr.period))),
+                 RemainingProj = c(rep(NA, times = curr.period), total.curr.year,
+                                   yr.end.proj*prop.vals$prop.vals.total[-c(1:curr.period)]),
+                 Actual2013 = c(0, cumsum(cash.2013$Total.Cash)),
+                 Actual2014 = c(0, cumsum(cash.2014$Total.Cash)),
+                 Actual2015 = c(0, cumsum(cash.2015$Total.Cash)),
+                 Actual2016 = c(0, cumsum(cash.2016$Total.Cash)))
+
+ThisYearsTarget <- data.frame(
+    FiscalYear = 2017,
+    ThisYearBudget = yr.end.budget, # a real number from Nancy
+    ThisYearProj = max(df$RemainingProj, na.rm = TRUE)
+    ) %>%
+    mutate(Difference = ThisYearProj - ThisYearBudget,
+           PercentOver = paste0(round(((ThisYearProj / ThisYearBudget) - 1) * 100, 1), "%"),
+           RedOrGreen = case_when(Difference > 0 ~ "Red",
+                                  TRUE ~ "Green"),
+           OverOrUnder = case_when(Difference > 0 ~ "over",
+                                   TRUE ~ "under"),
+           PayPeriod = 26)
+
+
+forthebars <- arbitrarytargets %>%
+    bind_rows(
+        ThisYearsTarget %>%
+            select(-PercentOver, -OverOrUnder) %>%
+            rename(Target = ThisYearBudget,
+                   YearEndCash = ThisYearProj)
+    )
+oldlines <- df %>%
+    select(-ActualCurrYear, -RemainingProj) %>%
+    gather(FiscalYear, Spent, -PayPeriod)
+
+newline <- df %>%
+    select(PayPeriod, ActualCurrYear, RemainingProj) %>%
+    mutate(ActualOrProj = case_when(is.na(ActualCurrYear) ~ "Projected",
+                                    TRUE ~ "Actual"),
+           linetype = case_when(is.na(ActualCurrYear) ~ "dash",
+                                    TRUE ~ "solid"),
+           ActAndProj2017 = case_when(is.na(RemainingProj) ~ ActualCurrYear,
+                                      TRUE ~ RemainingProj)) %>%
+    select(PayPeriod, ActualOrProj, ActAndProj2017, linetype)
+
+buttons <- list(
+    list(
+        active = -1,
+        type = "buttons",
+        x = 1.25,
+        y = .5,
+        buttons = list(
+            list(label = "Current Projections",
+                 method = "update",
+                 args = list(
+                     list(visible = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE))
+                 )),
+            list(
+                label = "Budget gaps",
+                method = "update",
+                args = list(
+                    list(visible = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE))
+                )
+                )
+            )
+        )
+    )
+
+blerp <- plot_ly() %>%
+    add_trace(
+        type = "scatter",
+        mode = "lines",
+        data = newline %>% filter(ActualOrProj == "Actual"),
+        x = ~PayPeriod,
+        y = ~ActAndProj2017,
+        line = list(width = 3, dash = "solid"),
+        name = "Current FY",
+        legendgroup = "CurrentFY",
+        color = ~I("blue")) %>%
+    add_trace(
+        type = "scatter",
+        mode = "lines",
+        data = newline %>% filter(PayPeriod >= curr.period),
+        x = ~PayPeriod,
+        y = ~ActAndProj2017,
+        line = list(width = 3, dash = "dash"),
+        name = "Projected FY",
+        legendgroup = "CurrentFY",
+        color = ~I("blue")) %>%
+    add_trace(
+        type = "scatter",
+        mode = "markers",
+        x = 26,
+        y = ThisYearsTarget$ThisYearBudget,
+        name = "BudgetTarget",
+        text = "Budget",
+        hoverinfo = "text",
+        showlegend = FALSE,
+        marker = list(symbol = "x")) %>%
+    add_trace(
+        type = "scatter",
+        mode = "lines",
+        data = oldlines,
+        x = ~PayPeriod,
+        y = ~Spent,
+        name = ~FiscalYear,
+        hoverinfo = "name",
+        color = ~FiscalYear,
+        legendgroup = "PastFYs",
+        line = list(width = 3, color = "grey"),
+        opacity = .5) %>%
+    add_trace(
+        type = "bar",
+        data = forthebars,
+        x = ~FiscalYear,
+        y = ~Difference,
+        color = ~I(RedOrGreen),
+        name = "Budget Gaps",
+        visible = FALSE) %>%
+    layout(updatemenus = buttons,
+           xaxis = list(title = ""),
+           yaxis = list(title = "", tickprefix = "$", exponentformat = "none"),
+           margin = list(l = 75))
+
+blerp
+
+htmlwidgets::saveWidget(blerp, paste0(savepath, "Citywide/ComponentGraphs/ProjectionDollars.html"))
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### [Significant changes from FY 16-17 with "PersonnelShortage"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesPersonnelShortageDollars.html)
+
+```{r}
+
+priorpers <- priorFY %>%
+    filter(ActivityGrouping == "PersonnelShortage") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>% 
+    group_by(CostCenter) %>%
+    summarize(PriorSpending = sum(OvertimeAmount))
+
+currentpers <- currentFY %>%
+    filter(ActivityGrouping == "PersonnelShortage") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>% 
+    group_by(CostCenter) %>%
+    summarize(CurrentSpending = sum(OvertimeAmount)) %>%
+    left_join(priorpers, by = c("CostCenter" = "CostCenter")) %>%
+    mutate(PriorSpending = case_when(
+        is.na(PriorSpending) ~ 0,
+        TRUE ~ PriorSpending
+    )) %>%
+    mutate(Difference = CurrentSpending - PriorSpending)
+
+top5 <- currentpers %>%
+    filter(Difference > 0) %>%
+    top_n(5, wt = Difference)
+bottom5 <- currentpers %>%
+    filter(Difference < 0) %>%
+    top_n(5, wt = -Difference)
+topandbottom <- bind_rows(top5, bottom5) %>%
+    mutate(CostCenter = factor(CostCenter, ordered = TRUE),
+           CostCenter = fct_reorder(CostCenter, -Difference),
+           MoreOrLess = case_when(Difference > 0 ~ "More",
+                                  Difference < 0 ~ "Less"))
+
+persplot <- plot_ly(
+    type = "bar",
+    data = topandbottom,
+    x = ~CostCenter,
+    y = ~Difference,
+    color = ~MoreOrLess,
+    colors = "RdBu",
+    opacity = .5
+    ) %>%
+    layout(yaxis = list(exponentformat = "none", title = "", tickprefix = "$"),
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "x",
+           legend = list(traceorder = "reversed"))
+
+saveWidget(persplot, paste0(savepath, "Citywide/ComponentGraphs/SigChangesPersonnelShortageDollars.html"))
+
+persplot
+
+```
+
+### [Significant changes from FY 16-17 with "CompletingAssignment"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCompletingAssignmentDollars.html)
+
+```{r}
+
+priorcompleting <- priorFY %>%
+    filter(ActivityGrouping == "CompletingAssignment") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>% 
+    group_by(CostCenter) %>%
+    summarize(PriorSpending = sum(OvertimeAmount))
+
+currentcompleting <- currentFY %>%
+    filter(ActivityGrouping == "CompletingAssignment") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>% 
+    group_by(CostCenter) %>%
+    summarize(CurrentSpending = sum(OvertimeAmount)) %>%
+    left_join(priorcompleting, by = c("CostCenter" = "CostCenter")) %>%
+    mutate(PriorSpending = case_when(
+        is.na(PriorSpending) ~ 0,
+        TRUE ~ PriorSpending
+    )) %>%
+    mutate(Difference = CurrentSpending - PriorSpending)
+
+top5 <- currentcompleting %>%
+    filter(Difference > 0) %>%
+    top_n(5, wt = Difference)
+bottom5 <- currentcompleting %>%
+    filter(Difference < 0) %>%
+    top_n(5, wt = -Difference)
+topandbottom <- bind_rows(top5, bottom5) %>%
+    mutate(CostCenter = factor(CostCenter, ordered = TRUE),
+           CostCenter = fct_reorder(CostCenter, -Difference),
+           MoreOrLess = case_when(Difference > 0 ~ "More",
+                                  Difference < 0 ~ "Less"))
+
+completingplot <- plot_ly(
+    type = "bar",
+    data = topandbottom,
+    x = ~CostCenter,
+    y = ~Difference,
+    color = ~MoreOrLess,
+    colors = "RdBu",
+    opacity = .5
+    ) %>%
+    layout(yaxis = list(exponentformat = "none", title = "", tickprefix = "$"),
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "x",
+           legend = list(traceorder = "reversed"))
+
+saveWidget(completingplot, paste0(savepath, "Citywide/ComponentGraphs/SigChangesCompletingAssignmentDollars.html"))
+
+completingplot
+
+```
+
+### [Significant changes from FY 16-17 with "CallBack"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCallBackDollars.html)
+
+```{r}
+
+priorcallback <- priorFY %>%
+    filter(ActivityGrouping == "CallBack") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>% 
+    group_by(CostCenter) %>%
+    summarize(PriorSpending = sum(OvertimeAmount))
+
+currentcallback <- currentFY %>%
+    filter(ActivityGrouping == "CallBack") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>% 
+    group_by(CostCenter) %>%
+    summarize(CurrentSpending = sum(OvertimeAmount)) %>%
+    left_join(priorcallback, by = c("CostCenter" = "CostCenter")) %>%
+    mutate(PriorSpending = case_when(
+        is.na(PriorSpending) ~ 0,
+        TRUE ~ PriorSpending
+    )) %>%
+    mutate(Difference = CurrentSpending - PriorSpending)
+
+top5 <- currentcallback %>%
+    filter(Difference > 0) %>%
+    top_n(5, wt = Difference)
+bottom5 <- currentcallback %>%
+    filter(Difference < 0) %>%
+    top_n(5, wt = -Difference)
+topandbottom <- bind_rows(top5, bottom5) %>%
+    mutate(CostCenter = factor(CostCenter, ordered = TRUE),
+           CostCenter = fct_reorder(CostCenter, -Difference),
+           MoreOrLess = case_when(Difference > 0 ~ "More",
+                                  Difference < 0 ~ "Less"))
+
+callbackplot <- plot_ly(
+    type = "bar",
+    data = topandbottom,
+    x = ~CostCenter,
+    y = ~Difference,
+    color = ~MoreOrLess,
+    colors = "RdBu",
+    opacity = .5
+    ) %>%
+    layout(yaxis = list(exponentformat = "none", title = "", tickprefix = "$"),
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "x",
+           legend = list(traceorder = "reversed"))
+
+saveWidget(callbackplot, paste0(savepath, "Citywide/ComponentGraphs/SigChangesCallBackDollars.html"))
+
+callbackplot
+
+```
+
+### [Significant changes from FY 16-17 with "Project"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesProjectDollars.html)
+
+```{r}
+#since switch to sections
+#15-16 fiscal year onwards
+#Cost Center median for years since switch to sections
+#Group current year by cost center, subtract median
+#show top 5 positive values, top 5 negative values
+
+priorproject <- priorFY %>%
+    filter(ActivityGrouping == "Project") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>% 
+    group_by(CostCenter) %>%
+    summarize(PriorSpending = sum(OvertimeAmount))
+
+currentproject <- currentFY %>%
+    filter(ActivityGrouping == "Project") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>% 
+    group_by(CostCenter) %>%
+    summarize(CurrentSpending = sum(OvertimeAmount)) %>%
+    left_join(priorproject, by = c("CostCenter" = "CostCenter")) %>%
+    mutate(PriorSpending = case_when(
+        is.na(PriorSpending) ~ 0,
+        TRUE ~ PriorSpending
+    )) %>%
+    mutate(Difference = CurrentSpending - PriorSpending)
+
+top5 <- currentproject %>%
+    filter(Difference > 0) %>%
+    top_n(5, wt = Difference)
+bottom5 <- currentproject %>%
+    filter(Difference < 0) %>%
+    top_n(5, wt = -Difference)
+topandbottom <- bind_rows(top5, bottom5) %>%
+    mutate(CostCenter = factor(CostCenter, ordered = TRUE),
+           CostCenter = fct_reorder(CostCenter, -Difference),
+           MoreOrLess = case_when(Difference > 0 ~ "More",
+                                  Difference < 0 ~ "Less"))
+
+projectplot <- plot_ly(
+    type = "bar",
+    data = topandbottom,
+    x = ~CostCenter,
+    y = ~Difference,
+    color = ~MoreOrLess,
+    colors = "RdBu",
+    opacity = .5
+    ) %>%
+    layout(yaxis = list(exponentformat = "none", title = "", tickprefix = "$"),
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "x",
+           legend = list(traceorder = "reversed"))
+
+saveWidget(projectplot, paste0(savepath, "Citywide/ComponentGraphs/SigChangesProjectDollars.html"))
+
+projectplot
+
+```
+
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### [Overall money spent by Pay Period](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TimeByPayPeriodDollars.html)
+
+```{r}
+
+PPOT <- allOT %>%
+    filter(! is.na(FiscalYear) & 
+               PayPeriodListed <= currentpayperiod &
+               PayPeriodListed > 0 &
+               Type == "Cash") %>%
+    group_by(PayPeriodListed, FiscalYear) %>%
+    summarize(PerPP = sum(OvertimeAmount)) %>%
+    ungroup() %>%
+    mutate(FYlabel = paste0("FY", substr(FiscalYear, 3, 4), "-", substr(FiscalYear, 8, 9))) %>%
+    select(-FiscalYear)
+
+PPOTspread <- PPOT %>%
+    spread(key = FYlabel, value = PerPP) %>%
+    as.data.frame()
+
+PPAvg <- PPOT %>%
+    filter(FYlabel != "FY17-18") %>%
+    group_by(PayPeriodListed) %>%
+    summarize(AvgByPP = mean(PerPP))
+
+currentFYlabel <- paste0("FY", 
+                         substr(currentFY %>% .$FiscalYear %>% .[[1]], 3, 4), 
+                         "-", 
+                         substr(currentFY %>% .$FiscalYear %>% .[[1]], 8, 9))
+
+timePlot <- plot_ly(
+    type = "scatter", 
+    mode = "lines")
+
+for ( i in 2:ncol(PPOTspread)) {
+    timePlot <- timePlot %>%
+        add_trace(
+            data = PPOTspread[, c(1, i)],
+            x = PPOTspread[, 1],
+            y = PPOTspread[, i],
+            connectgaps = FALSE,
+            name = colnames(PPOTspread)[i],
+            visible = ifelse(colnames(PPOTspread)[i] == currentFYlabel, 
+                             TRUE, #If the colname is the current fiscal year, visible
+                             "legendonly"), # otherwise, legendonly
+            # line = ifelse(test = colnames(PPOTspread)[i] == currentFYlabel,
+            #               yes = list(width = 4, dash = "solid"),
+            #               no = list(width = 2, dash = "dash")), # This has no effect; not sure why
+            hoverinfo = "y+name"
+        )
+}
+
+timePlot <- timePlot %>%
+    add_trace(
+        data = PPAvg,
+        x = ~PayPeriodListed,
+        y = ~AvgByPP,
+        visible = TRUE,
+        name = "Average",
+        hoverinfo = "y+name"
+    ) %>%
+    layout(xaxis = list(autotick = FALSE, title = ""),
+           yaxis = list(exponentformat = "none", title = "", tickprefix = "$"),
+           hovermode = "x")
+
+saveWidget(timePlot, paste0(savepath, "Citywide/ComponentGraphs/TimeByPayPeriodDollars.html"))
+
+timePlot
+
+```
+
+### [Top Project Codes](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TopProjectCodesDollars.html)
+
+```{r}
+
+MCUOT <- cashonlyOT %>%
+    filter(CostCenter == "MCU" &
+               FiscalYear == "2017-2018") %>%
+    group_by(ProjectCodeFactor) %>%
+    summarize(SpentPerProject = sum(OvertimeAmount)) %>%
+    top_n(10, wt = SpentPerProject) %>%
+    mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, SpentPerProject))
+
+SPEVOT <- cashonlyOT %>%
+    filter(CostCenter == "SP EV" &
+               FiscalYear == "2017-2018") %>%
+    group_by(ProjectCodeFactor) %>%
+    summarize(SpentPerProject = sum(OvertimeAmount)) %>%
+    top_n(10, wt = SpentPerProject) %>%
+    mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, SpentPerProject))
+
+OtherOT <- cashonlyOT %>%
+    filter((CostCenter != "MCU" & CostCenter != "SP EV") &
+               FiscalYear == "2017-2018") %>%
+    filter(ProjectCodeFactor != "No Project Code Specified") %>% #not sure if I should filter these out
+    group_by(ProjectCodeFactor) %>%
+    summarize(SpentPerProject = sum(OvertimeAmount)) %>%
+    top_n(10, wt = SpentPerProject) %>%
+    mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, SpentPerProject))
+
+CCplot <- plot_ly(
+    type = "bar") %>%
+    add_trace(data = MCUOT,
+              x = ~ProjectCodeFactor,
+              y = ~SpentPerProject,
+              name = "MCU",
+              visible = TRUE) %>%
+    add_trace(data = SPEVOT,
+              x = ~ProjectCodeFactor,
+              y = ~SpentPerProject,
+              name = "Special Events",
+              visible = "legendonly") %>%
+    add_trace(data = OtherOT,
+              x = ~ProjectCodeFactor,
+              y = ~SpentPerProject,
+              name = "Other",
+              visible = "legendonly") %>%
+    layout(yaxis = list(exponentformat = "none", title = "", tickprefix = "$")
+           , xaxis = list(title = "")
+           , margin = list(b = 150)
+           , hovermode = "x"
+           )
+
+saveWidget(CCplot, paste0(savepath, "Citywide/ComponentGraphs/TopProjectCodesDollars.html"))
+
+CCplot
+
+```
+
+Overview - Hours
+=====================================================================================
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### [Hours Worked by Fiscal Year & Activity](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ActivityPlotHours.html)
+
+```{r}
+
+AGyeartotal <- allOT %>%
+    filter(!is.na(FiscalYear) & !is.na(ActivityGrouping)) %>%
+    group_by(FiscalYear) %>%
+    summarize(YearlyTotal = sum(OvertimeHours))
+
+ActivityGroup <- allOT %>%
+    filter(!is.na(FiscalYear) & !is.na(ActivityGrouping)) %>%
+    group_by(FiscalYear, ActivityGrouping) %>%
+    summarize(SpentPerActivity = sum(OvertimeHours)) %>%
+    left_join(AGyeartotal, by = c("FiscalYear" = "FiscalYear")) %>%
+    mutate(ActivityGrouping = fct_rev(ActivityGrouping),
+           FYlabel = paste0("FY", substr(FiscalYear, 3, 4), "-", substr(FiscalYear, 8, 9)))
+
+activityPlot <- plot_ly(
+    data = ActivityGroup) %>% 
+    add_trace(
+        type = "bar",
+        #mode = "stack",
+        x = ~FYlabel,
+        y = ~SpentPerActivity,
+        color = ~ActivityGrouping) %>%
+    add_trace(
+        type = "scatter",
+        mode = "markers",
+        marker = list(symbol = "line-ew"),
+        name = "FY Total",
+        showlegend = FALSE,
+        x = ~FYlabel,
+        y = ~YearlyTotal) %>%
+    layout(barmode = "stack",
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "closest",
+           yaxis = list(title = "", exponentformat = "none"),
+           margin = list(b = 100),
+           legend = list(traceorder = "reversed", 
+                         orientation = "h",
+                         x = 1,
+                         y = -.3))
+
+saveWidget(activityPlot, paste0(savepath, "Citywide/ComponentGraphs/ActivityPlotHours.html"))
+
+activityPlot
+
+```
+
+### [Projection](file://cor.local/RPD/OBI-Analytics/OT Dashboards/CityWide/ComponentGraphs/ProjectionInHours.html)
+
+```{r eval}
+
+prop.vals.hour <- read.csv("//cor.local/RPD/OBI/Data/overtime/HourPropVals.csv", header = T)
+prop.vals.nc.hour <- read.csv("//cor.local/RPD/OBI/Data/overtime/HourPropValsNONCUMULATIVE.csv", header = T)
+
+hour <- OT %>%
+    filter(ProjectCodeFactor != "Zero Tolerance", FiscalYear %in% 2013:curr.year, Type == "Cash") %>%
+    group_by(FiscalYear, PayPeriodListed) %>%
+    summarise(Total.Hours = sum(OvertimeHours)) %>%
+    filter(PayPeriodListed %in% 1:26)
+
+hour.2013 <- hour %>% filter(FiscalYear == 2013)
+hour.2014 <- hour %>% filter(FiscalYear == 2014)
+hour.2015 <- hour %>% filter(FiscalYear == 2015)
+hour.2016 <- hour %>% filter(FiscalYear == 2016)
+hour.curr.year <- hour %>% filter(FiscalYear == curr.year)
+
+total.curr.year <- sum(hour.curr.year$Total.Hours)
+avg.prop.now <- prop.vals.hour$prop.vals.total[curr.period]
+
+currentFYrate <- OT %>%
+    filter(ProjectCodeFactor != "Zero Tolerance", FiscalYear == curr.year) %>%
+    .$OvertimeRate %>%
+    mean()
+
+oldrates <- OT %>%
+    filter(ProjectCodeFactor != "Zero Tolerance", FiscalYear %in% 2013:curr.year) %>%
+    group_by(FiscalYear) %>%
+    summarize(AvgOTRate = mean(OvertimeRate, na.rm = TRUE))
+
+yr.end.proj <- total.curr.year / avg.prop.now # projected how many hours we'll have spent
+yr.end.budget.hours <- yr.end.budget / currentFYrate
+
+arbitrarytargets.hours <- arbitrarytargets %>%
+    left_join(oldrates, by = c("FiscalYear" = "FiscalYear")) %>%
+    mutate(YearEndHours = YearEndCash / AvgOTRate,
+           DifferenceHours = Difference / AvgOTRate,
+           TargetHours = Target / AvgOTRate) %>%
+    select(-Target, -YearEndCash, -Difference)
+
+df.hours <- data.frame(PayPeriod = 0:26, 
+                 ActualCurrYear = c(0, cumsum(hour.curr.year$Total.Hours), rep(NA, times = (26 - curr.period))),
+                 RemainingProj = c(rep(NA, times = curr.period), total.curr.year,
+                                   yr.end.proj * prop.vals.hour$prop.vals.total[-c(1:curr.period)]),
+                 Actual2013 = c(0, cumsum(hour.2013$Total.Hours)),
+                 Actual2014 = c(0, cumsum(hour.2014$Total.Hours)),
+                 Actual2015 = c(0, cumsum(hour.2015$Total.Hours)),
+                 Actual2016 = c(0, cumsum(hour.2016$Total.Hours)))
+
+ThisYearsTarget.hours <- data.frame(
+    FiscalYear = 2017,
+    ThisYearBudget = 5609000 / currentFYrate, # a real number from Nancy
+    ThisYearProj = max(df.hours$RemainingProj, na.rm = TRUE)
+    ) %>%
+    mutate(Difference = ThisYearProj - ThisYearBudget,
+           PercentOver = paste0(round(((ThisYearProj / ThisYearBudget) - 1) * 100, 1), "%"),
+           RedOrGreen = case_when(Difference > 0 ~ "Red",
+                                  TRUE ~ "Green"),
+           OverOrUnder = case_when(Difference > 0 ~ "over",
+                                   TRUE ~ "under"),
+           PayPeriod = 26)
+
+hourbars <- arbitrarytargets.hours %>%
+    bind_rows(
+        ThisYearsTarget.hours %>%
+            select(-PercentOver, -OverOrUnder) %>%
+            rename(TargetHours = ThisYearBudget,
+                   YearEndHours = ThisYearProj,
+                      DifferenceHours = Difference) %>%
+            bind_cols(AvgOTRate = currentFYrate) %>%
+            select(FiscalYear, RedOrGreen, PayPeriod, AvgOTRate, YearEndHours, DifferenceHours, TargetHours)
+        )
+
+houroldlines <- df.hours %>%
+    select(-ActualCurrYear, -RemainingProj) %>%
+    gather(FiscalYear, Spent, -PayPeriod)
+
+hournewline <- df.hours %>%
+    select(PayPeriod, ActualCurrYear, RemainingProj) %>%
+    mutate(ActualOrProj = case_when(is.na(ActualCurrYear) ~ "Projected",
+                                    TRUE ~ "Actual"),
+           linetype = case_when(is.na(ActualCurrYear) ~ "dash", 
+                                TRUE ~ "solid"),
+           ActAndProj2017 = case_when(is.na(RemainingProj) ~ ActualCurrYear,
+                                      TRUE ~ RemainingProj)) %>%
+    select(PayPeriod, ActualOrProj, ActAndProj2017, linetype)
+
+buttons <- list(
+    list(
+        active = -1,
+        type = "buttons",
+        x = 1.25,
+        y = .5,
+        buttons = list(
+            list(label = "Current Projections",
+                 method = "update",
+                 args = list(
+                     list(visible = c(TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE))
+                 )),
+            list(
+                label = "Budget gaps",
+                method = "update",
+                args = list(
+                    list(visible = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE))
+                )
+                )
+            )
+        )
+    )
+
+herp <- plot_ly() %>%
+    add_trace(
+        type = "scatter",
+        mode = "lines",
+        data = hournewline %>% filter(ActualOrProj == "Actual"),
+        x = ~PayPeriod,
+        y = ~ActAndProj2017,
+        line = list(width = 3, dash = "solid"),
+        name = "Current FY",
+        legendgroup = "CurrentFY",
+        hovertext = ~paste0(round(ActAndProj2017, 0), " hours worked as of PayPeriod ", PayPeriod),
+        hoverinfo = "text",
+        color = ~I("blue")) %>%
+    add_trace(
+        type = "scatter",
+        mode = "lines",
+        data = hournewline %>% filter(PayPeriod >= curr.period),
+        x = ~PayPeriod,
+        y = ~ActAndProj2017,
+        line = list(width = 3, dash = "dash"),
+        name = "Projected FY",
+        hovertext = ~paste0(round(ActAndProj2017, 0), " hours projected to be worked as of PayPeriod ", PayPeriod),
+        hoverinfo = "text",
+        legendgroup = "CurrentFY",
+        color = ~I("blue")) %>%
+    add_trace(
+        type = "scatter",
+        mode = "markers",
+        x = 26,
+        y = ThisYearsTarget.hours$ThisYearBudget,
+        name = "TargetInHours",
+        text = "Budget",
+        hoverinfo = "text",
+        showlegend = FALSE,
+        marker = list(symbol = "x")) %>%
+    add_trace(
+        type = "scatter",
+        mode = "lines",
+        data = houroldlines,
+        x = ~PayPeriod,
+        y = ~Spent,
+        name = ~FiscalYear,
+        hoverinfo = "name",
+        color = ~FiscalYear,
+        legendgroup = "PastFYs",
+        line = list(width = 3, color = "grey"),
+        opacity = .5) %>%
+    add_trace(
+        type = "bar",
+        data = hourbars,
+        x = ~FiscalYear,
+        y = ~DifferenceHours,
+        color = ~I(RedOrGreen),
+        name = "Budget Gaps",
+        hovertext = ~ifelse(RedOrGreen == "Red", 
+                            paste0("FY", FiscalYear, "-", FiscalYear+1, " is/was ", 
+                                   round(DifferenceHours, 0), " hours over budget."),
+                            paste0("FY", FiscalYear, "-", FiscalYear+1, " is/was ", 
+                                   round(DifferenceHours, 0), " hours under budget.")),
+        hoverinfo = "text",
+        visible = FALSE) %>%
+    layout(updatemenus = buttons,
+           xaxis = list(title = ""),
+           yaxis = list(title = "", exponentformat = "none"))
+
+saveWidget(herp, paste0(savepath, "CityWide/ComponentGraphs/ProjectionInHours.html"))
+
+herp
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### [Significant changes from FY 16-17 with "PersonnelShortage"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesPersonnelShortageHours.html)
+
+```{r}
+
+priorPersonnelShortagehour <- priorFY %>%
+    filter(ActivityGrouping == "PersonnelShortage") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>%
+    group_by(CostCenter) %>%
+    summarize(PriorHours = sum(OvertimeHours))
+
+currentPersonnelShortagehours <- currentFY %>%
+    filter(ActivityGrouping == "PersonnelShortage") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>%
+    group_by(CostCenter) %>%
+    summarize(CurrentHours = sum(OvertimeHours)) %>%
+    left_join(priorPersonnelShortagehour, by = c("CostCenter" = "CostCenter")) %>%
+    mutate(PriorHours = case_when(is.na(PriorHours) ~ 0,
+                                  TRUE ~ PriorHours)) %>%
+    mutate(Difference = CurrentHours - PriorHours)
+
+top5 <- currentPersonnelShortagehours %>%
+    filter(Difference > 0) %>%
+    top_n(5, wt = Difference)
+bottom5 <- currentPersonnelShortagehours %>%
+    filter(Difference < 0) %>%
+    top_n(5, wt = -Difference)
+topandbottom <- bind_rows(top5, bottom5) %>%
+    mutate(CostCenter = factor(CostCenter, ordered = TRUE),
+           CostCenter = fct_reorder(CostCenter, -Difference),
+           MoreOrLess = case_when(Difference > 0 ~ "More", 
+                                  Difference < 0 ~ "Less"))
+
+PersonnelShortagehoursplot <- plot_ly(
+    type = "bar",
+    data = topandbottom,
+    x = ~CostCenter,
+    y = ~Difference,
+    color = ~MoreOrLess,
+    colors = "RdBu",
+    opacity = .5
+    ) %>%
+    layout(yaxis = list(exponentformat = "none", title = ""),
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "x", 
+           legend = list(traceorder = "reversed"))
+
+saveWidget(PersonnelShortagehoursplot,
+           paste0(savepath, "Citywide/ComponentGraphs/SigChangesPersonnelShortageHours.html"))
+
+PersonnelShortagehoursplot
+
+```
+
+### [Significant changes from FY 16-17 with "CompletingAssignment"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCompletingAssignmentHours.html)
+
+```{r}
+
+priorCompletingAssignmenthour <- priorFY %>%
+    filter(ActivityGrouping == "CompletingAssignment") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>%
+    group_by(CostCenter) %>%
+    summarize(PriorHours = sum(OvertimeHours))
+
+currentCompletingAssignmenthours <- currentFY %>%
+    filter(ActivityGrouping == "CompletingAssignment") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>%
+    group_by(CostCenter) %>%
+    summarize(CurrentHours = sum(OvertimeHours)) %>%
+    left_join(priorCompletingAssignmenthour, by = c("CostCenter" = "CostCenter")) %>%
+    mutate(PriorHours = case_when(is.na(PriorHours) ~ 0,
+                                  TRUE ~ PriorHours)) %>%
+    mutate(Difference = CurrentHours - PriorHours)
+
+top5 <- currentCompletingAssignmenthours %>%
+    filter(Difference > 0) %>%
+    top_n(5, wt = Difference)
+bottom5 <- currentCompletingAssignmenthours %>%
+    filter(Difference < 0) %>%
+    top_n(5, wt = -Difference)
+topandbottom <- bind_rows(top5, bottom5) %>%
+    mutate(CostCenter = factor(CostCenter, ordered = TRUE),
+           CostCenter = fct_reorder(CostCenter, -Difference),
+           MoreOrLess = case_when(Difference > 0 ~ "More", 
+                                  Difference < 0 ~ "Less"))
+
+CompletingAssignmenthoursplot <- plot_ly(
+    type = "bar",
+    data = topandbottom,
+    x = ~CostCenter,
+    y = ~Difference,
+    color = ~MoreOrLess,
+    colors = "RdBu",
+    opacity = .5
+    ) %>%
+    layout(yaxis = list(exponentformat = "none", title = ""),
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "x",
+           legend = list(traceorder = "reversed"))
+
+saveWidget(CompletingAssignmenthoursplot,
+           paste0(savepath, "Citywide/ComponentGraphs/SigChangesCompletingAssignmentHours.html"))
+
+CompletingAssignmenthoursplot
+
+```
+
+### [Significant changes from FY 16-17 with "CallBack"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCallBackHours.html)
+
+```{r}
+
+priorCallBackhour <- priorFY %>%
+    filter(ActivityGrouping == "CallBack") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>%
+    group_by(CostCenter) %>%
+    summarize(PriorHours = sum(OvertimeHours))
+
+currentCallBackhours <- currentFY %>%
+    filter(ActivityGrouping == "CallBack") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>%
+    group_by(CostCenter) %>%
+    summarize(CurrentHours = sum(OvertimeHours)) %>%
+    left_join(priorCallBackhour, by = c("CostCenter" = "CostCenter")) %>%
+    mutate(PriorHours = case_when(is.na(PriorHours) ~ 0,
+                                  TRUE ~ PriorHours)) %>%
+    mutate(Difference = CurrentHours - PriorHours)
+
+top5 <- currentCallBackhours %>%
+    filter(Difference > 0) %>%
+    top_n(5, wt = Difference)
+bottom5 <- currentCallBackhours %>%
+    filter(Difference < 0) %>%
+    top_n(5, wt = -Difference)
+topandbottom <- bind_rows(top5, bottom5) %>%
+    mutate(CostCenter = factor(CostCenter, ordered = TRUE),
+           CostCenter = fct_reorder(CostCenter, -Difference),
+           MoreOrLess = case_when(Difference > 0 ~ "More", 
+                                  Difference < 0 ~ "Less"))
+
+CallBackhoursplot <- plot_ly(
+    type = "bar",
+    data = topandbottom,
+    x = ~CostCenter,
+    y = ~Difference,
+    color = ~MoreOrLess,
+    colors = "RdBu",
+    opacity = .5
+    ) %>%
+    layout(yaxis = list(exponentformat = "none", title = ""),
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "x",
+           legend = list(traceorder = "reversed"))
+
+saveWidget(CallBackhoursplot,
+           paste0(savepath, "Citywide/ComponentGraphs/SigChangesCallBackHours.html"))
+
+CallBackhoursplot
+
+```
+
+### [Significant changes from FY 16-17 with "Project"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesProjectHours.html)
+
+```{r}
+
+priorprojecthour <- priorFY %>%
+    filter(ActivityGrouping == "Project") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>%
+    group_by(CostCenter) %>%
+    summarize(PriorHours = sum(OvertimeHours))
+
+currentprojecthours <- currentFY %>%
+    filter(ActivityGrouping == "Project") %>%
+    mutate(CostCenter = gsub(x = CostCenter,
+                             pattern = "15|16|17",
+                             replacement = ""),
+           CostCenter = case_when(grepl(x = CostCenter, "STDWI") ~ "STDWI",
+                                  TRUE ~ CostCenter)) %>%
+    group_by(CostCenter) %>%
+    summarize(CurrentHours = sum(OvertimeHours)) %>%
+    left_join(priorprojecthour, by = c("CostCenter" = "CostCenter")) %>%
+    mutate(PriorHours = case_when(is.na(PriorHours) ~ 0,
+                                  TRUE ~ PriorHours)) %>%
+    mutate(Difference = CurrentHours - PriorHours)
+
+top5 <- currentprojecthours %>%
+    filter(Difference > 0) %>%
+    top_n(5, wt = Difference)
+bottom5 <- currentprojecthours %>%
+    filter(Difference < 0) %>%
+    top_n(5, wt = -Difference)
+topandbottom <- bind_rows(top5, bottom5) %>%
+    mutate(CostCenter = factor(CostCenter, ordered = TRUE),
+           CostCenter = fct_reorder(CostCenter, -Difference),
+           MoreOrLess = case_when(Difference > 0 ~ "More", 
+                                  Difference < 0 ~ "Less"))
+
+projecthoursplot <- plot_ly(
+    type = "bar",
+    data = topandbottom,
+    x = ~CostCenter,
+    y = ~Difference,
+    color = ~MoreOrLess,
+    colors = "RdBu",
+    opacity = .5
+    ) %>%
+    layout(yaxis = list(exponentformat = "none", title = ""),
+           xaxis = list(title = "", tickangle = 45),
+           hovermode = "x",
+           legend = list(traceorder = "reversed"))
+
+saveWidget(projecthoursplot,
+           paste0(savepath, "Citywide/ComponentGraphs/SigChangesProjectHours.html"))
+
+projecthoursplot
+
+```
+
+Column {date-width=500}
+-----------------------------------------------------------------------
+
+### [Overall Hours Worked by Pay Period](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/HoursWorkedByPayPeriod.html)
+
+```{r}
+
+PPOT <- allOT %>%
+    filter(! is.na(FiscalYear) & 
+               PayPeriodListed <= currentpayperiod &
+               PayPeriodListed > 0) %>%
+    group_by(PayPeriodListed, FiscalYear) %>%
+    summarize(PerPP = sum(OvertimeHours)) %>%
+    ungroup() %>%
+    mutate(FYlabel = paste0("FY", substr(FiscalYear, 3, 4), "-", substr(FiscalYear, 8, 9))) %>%
+    select(-FiscalYear)
+
+PPOTspread <- PPOT %>%
+    spread(key = FYlabel, value = PerPP) %>%
+    as.data.frame()
+
+PPAvg <- PPOT %>%
+    filter(FYlabel != "FY17-18") %>%
+    group_by(PayPeriodListed) %>%
+    summarize(AvgByPP = mean(PerPP))
+
+timePlot <- plot_ly(
+    type = "scatter", 
+    mode = "lines")
+
+for ( i in 2:ncol(PPOTspread)) {
+    timePlot <- timePlot %>%
+        add_trace(
+            data = PPOTspread[, c(1, i)],
+            x = PPOTspread[, 1],
+            y = PPOTspread[, i],
+            connectgaps = FALSE,
+            name = colnames(PPOTspread)[i],
+            visible = ifelse(colnames(PPOTspread)[i] == currentFYlabel, 
+                             TRUE, #If the colname is the current fiscal year, visible
+                             "legendonly"), # otherwise, legendonly
+            hoverinfo = "y+name"
+        )
+}
+
+timePlot <- timePlot %>%
+    add_trace(
+        data = PPAvg,
+        x = ~PayPeriodListed,
+        y = ~AvgByPP,
+        visible = TRUE,
+        name = "Average",
+        hoverinfo = "y+name"
+    ) %>%
+    layout(xaxis = list(autotick = FALSE, title = ""),
+           yaxis = list(exponentformat = "none", title = ""),
+           hovermode = "x")
+
+saveWidget(timePlot, 
+           paste0(savepath, "Citywide/ComponentGraphs/HoursWorkedByPayPeriod.html"))
+
+timePlot
+
+```
+
+### [Top Project Codes](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TopProjectCodesByHours.html)
+
+```{r}
+
+MCUOT <- allOT %>%
+    filter(CostCenter == "MCU" &
+               FiscalYear == "2017-2018") %>%
+    group_by(ProjectCodeFactor) %>%
+    summarize(WorkedPerProject = sum(OvertimeHours)) %>%
+    top_n(10, wt = WorkedPerProject) %>%
+    mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, WorkedPerProject))
+
+SPEVOT <- allOT %>%
+    filter(CostCenter == "SP EV" &
+               FiscalYear == "2017-2018") %>%
+    group_by(ProjectCodeFactor) %>%
+    summarize(WorkedPerProject = sum(OvertimeHours)) %>%
+    top_n(10, wt = WorkedPerProject) %>%
+    mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, WorkedPerProject))
+
+OtherOT <- allOT %>%
+    filter((CostCenter != "MCU" & CostCenter != "SP EV") &
+               FiscalYear == "2017-2018") %>%
+    filter(ProjectCodeFactor != "No Project Code Specified") %>% #not sure if I should filter these out
+    group_by(ProjectCodeFactor) %>%
+    summarize(WorkedPerProject = sum(OvertimeHours)) %>%
+    top_n(10, wt = WorkedPerProject) %>%
+    mutate(ProjectCodeFactor = fct_reorder(ProjectCodeFactor, WorkedPerProject))
+
+CCplot <- plot_ly(
+    type = "bar") %>%
+    add_trace(data = MCUOT,
+              x = ~ProjectCodeFactor,
+              y = ~WorkedPerProject,
+              name = "MCU",
+              visible = TRUE) %>%
+    add_trace(data = SPEVOT,
+              x = ~ProjectCodeFactor,
+              y = ~WorkedPerProject,
+              name = "Special Events",
+              visible = "legendonly") %>%
+    add_trace(data = OtherOT,
+              x = ~ProjectCodeFactor,
+              y = ~WorkedPerProject,
+              name = "Other CostCenters",
+              visible = "legendonly") %>%
+    layout(yaxis = list(exponentformat = "none", title = "")
+           , xaxis = list(title = "")
+           , margin = list(b = 150)
+           , hovermode = "x"
+           )
+
+saveWidget(CCplot,
+           paste0(savepath, "Citywide/ComponentGraphs/TopProjectCodesByHours.html"))
+
+CCplot
+
+```

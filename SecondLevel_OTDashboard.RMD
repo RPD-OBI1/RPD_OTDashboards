@@ -410,16 +410,16 @@ if(numofslips == 0) {
         y = ~ActivityGrouping,
         x = activitytypes[,2],
         type = "bar",
-        marker = list(color = otdata$color[match(names(activitytypes[2]), otdata$CostCenter)]),
         name = names(activitytypes)[2],
+        marker = list(color = pal[pal$CostCenter == names(activitytypes)[2], "color"]),
         orientation = "h")
     
     for (i in 3:(ncol(activitytypes) - 1)) {
         p <- add_trace(
             p,
             x = activitytypes[, i],
-            y = ~ActivityGrouping,
-            marker = list(color = otdata$color[match(names(activitytypes[i]), otdata$CostCenter)]),
+            y = activitytypes$ActivityGrouping,
+            marker = list(color = pal[pal$CostCenter == names(activitytypes)[i] , "color"]),
             name = names(activitytypes)[i])
     }
     
@@ -451,45 +451,49 @@ if(numofslips == 0) {
         ungroup() %>%
         group_by(CostCenter) %>%
         top_n(n = 3, wt = Amount) %>% 
-        arrange(desc(Amount)) %>%
-        ungroup() %>%
+        ungroup() 
+    earnersTotal <- earners %>%
+        group_by(PersonnelName_New) %>%
+        summarise(TotalAmount = sum(Amount))
+    earners <- earners %>%
+        full_join(earnersTotal, by = c("PersonnelName_New")) %>%
+        arrange(desc(TotalAmount)) %>%
         left_join(pal, by = "CostCenter") %>%
         mutate(ShowLegend = case_when(duplicated(.$CostCenter) ~ FALSE,
                                       TRUE ~ TRUE),
-               CostCenter = factor(CostCenter, ordered = TRUE)) %>%
-        arrange(CostCenter)
+               CostCenter = factor(CostCenter, ordered = TRUE),
+               PersonnelName_New = factor(PersonnelName_New, levels = earnersTotal$PersonnelName_New))
     
-    p <- plot_ly(
-        type = "bar",
-        orientation = "h"
-    )
-    
-    for (i in 1:nrow(earners)) {
-        p <- p %>% 
-            add_trace(
-                data = earners[i ,],
-                x = ~Amount,
-                y = ~PersonnelName_New,
-                legendgroup = ~CostCenter,
-                name = ~CostCenter,
-                marker = list(color = ~color),
-                showlegend = ~ShowLegend
-            )
-    }
-    
-    p <- p %>%
-        layout(yaxis = list(title = "", 
+    q <- plot_ly(
+        type = "bar"
+        ) %>%
+        layout(margin = list(l = 200),
+               hovermode = "y",
+               xaxis = list(title = "", 
+                            exponentformat = "none", 
+                            tickprefix = "$"),
+               yaxis = list(title = "", 
+                            exponentformat = "none", 
                             autorange = "reversed",
                             categoryorder = "array",
-                            categoryarray = earners %>% arrange(desc(Amount)) %>% .$PersonnelName_New),
-               xaxis = list(title = "", 
-                            tickprefix = "$", 
-                            exponentformat = "none"),
-               legend = list(traceorder = "normal"),
-               margin = list(l = 150),
+                            categoryarray = earners %>% 
+                                arrange(desc(TotalAmount)) %>% 
+                                .$PersonnelName_New %>%
+                                unique()),
                barmode = "stack")
+    
+    
+    for ( i in 1:length(unique(earners$CostCenter))) {
+        q <- q %>%
+            add_trace(earners[earners$CostCenter == unique(earners$CostCenter)[i],],
+                  x = earners[earners$CostCenter == unique(earners$CostCenter)[i], ] %>% .$Amount,
+                  y = earners[earners$CostCenter == unique(earners$CostCenter)[i], ] %>% .$PersonnelName_New,
+                  name = unique(earners$CostCenter)[i],
+                  marker = list(color = earners[earners$CostCenter == unique(earners$CostCenter)[i], ] %>% 
+                                     .$color))
+    }
 
-    p
+    q
     }
 
 ```
@@ -978,42 +982,91 @@ if(numofslips == 0) {
         ungroup() %>%
         group_by(CostCenter) %>%
         top_n(n = 3, wt = HoursWorked) %>% 
-        arrange(desc(HoursWorked)) %>%
-        ungroup() %>%
+        #arrange(desc(HoursWorked)) %>%
+        ungroup()
+    earnersTotal <- earners %>%
+        group_by(PersonnelName_New) %>%
+        summarise(TotalAmount = sum(HoursWorked))
+    earners <- earners %>%
+        full_join(earnersTotal, by = c("PersonnelName_New")) %>%
         left_join(pal, by = "CostCenter") %>%
-        mutate(ShowLegend = case_when(duplicated(.$CostCenter) ~ FALSE,
-                                      TRUE ~ TRUE),
-               CostCenter = factor(CostCenter, ordered = TRUE)) %>%
-        arrange(CostCenter)
+        arrange(desc(TotalAmount)) %>%
+        mutate(PersonnelName_New = factor(PersonnelName_New, levels = earnersTotal$PersonnelName_New),
+               PersonnelName_New = fct_reorder(PersonnelName_New, TotalAmount))
+    
+    
+    # p <- plot_ly(
+    #     type = "bar",
+    #     orientation = "h"
+    # )
+    # 
+    # for (i in 1:nrow(earners)) {
+    #     p <- p %>% 
+    #         add_trace(
+    #             data = earners[i ,],
+    #             x = ~HoursWorked,
+    #             y = ~PersonnelName_New,
+    #             legendgroup = ~CostCenter,
+    #             name = ~CostCenter,
+    #             marker = list(color = ~color),
+    #             showlegend = ~ShowLegend
+    #         )
+    # }
+    # 
+    # p <- p %>%
+    #     layout(yaxis = list(autorange = "reversed",
+    #                         title = "",
+    #                         categoryorder = "array",
+    #                         categoryarray = earners %>% arrange(desc(HoursWorked)) %>% .$PersonnelName_New),
+    #            xaxis = list(title = ""),
+    #            legend = list(traceorder = "normal"),
+    #            margin = list(l = 150),
+    #            barmode = "stack")
     
     p <- plot_ly(
+        data = earners,
+        x = ~HoursWorked,
+        y = ~PersonnelName_New,
         type = "bar",
-        orientation = "h"
-    )
-    
-    for (i in 1:nrow(earners)) {
-        p <- p %>% 
-            add_trace(
-                data = earners[i ,],
-                x = ~HoursWorked,
-                y = ~PersonnelName_New,
-                legendgroup = ~CostCenter,
-                name = ~CostCenter,
-                marker = list(color = ~color),
-                showlegend = ~ShowLegend
-            )
-    }
-
-    p <- p %>%
-        layout(yaxis = list(autorange = "reversed",
-                            title = "",
-                            categoryorder = "array",
-                            categoryarray = earners %>% arrange(desc(HoursWorked)) %>% .$PersonnelName_New),
-               xaxis = list(title = ""),
-               legend = list(traceorder = "normal"),
-               margin = list(l = 150),
+        orientation = "h",
+        color = ~CostCenter) %>%
+        layout(margin = list(l = 200),
+               hovermode = "y",
+               xaxis = list(title = "Hours", exponentformat = "none"),
+               yaxis = list(title = "", exponentformat = "none"),
                barmode = "stack")
-    p
+    
+    q <- plot_ly(
+        type = "bar"
+        ) %>% 
+        layout(margin = list(l = 200),
+               hovermode = "y",
+               xaxis = list(title = "", 
+                            exponentformat = "none", 
+                            tickprefix = "$"),
+               yaxis = list(title = "", 
+                            exponentformat = "none", 
+                            autorange = "reversed",
+                            categoryorder = "array",
+                            categoryarray = earners %>% 
+                                arrange(desc(TotalAmount)) %>% 
+                                .$PersonnelName_New %>%
+                                unique()),
+               barmode = "stack")
+    
+    for (i in 1:length(unique(earners$CostCenter))) {
+        q <- q %>%
+            add_trace(earners[earners$CostCenter == unique(earners$CostCenter)[i],],
+                      x = earners[earners$CostCenter == unique(earners$CostCenter)[i], ] %>% 
+                          .$HoursWorked,
+                      y = earners[earners$CostCenter == unique(earners$CostCenter)[i], ] %>% 
+                          .$PersonnelName_New,
+                      name = unique(earners$CostCenter)[i],
+                      marker = list(color = earners[earners$CostCenter == unique(earners$CostCenter)[i], ] %>% 
+                                        .$color))
+    }
+    q
+    
     }
 
 ```
@@ -1214,7 +1267,9 @@ Data
 otdata$OTDate <- as.character(otdata$OTDate) # to dump the scroll bar in the datatable
 
 datatable(otdata %>% 
-              select(PersonnelName_New, Rank_New, Type, OvertimeHours, OvertimeAmount, OTDate, CostCenter, ProjectCodeFactor, ActivityFull),
+              select(PersonnelName_New, Rank_New, Type, 
+                     OvertimeHours, OvertimeAmount, OTDate, 
+                     CostCenter, ProjectCodeFactor, ActivityFull),
           filter = "top", 
           rownames = FALSE,
           colnames = c("Name", "Rank", "Type", "Hours", "Amount", "Date", "Cost Center", "Project Code", "Activity Type"),
