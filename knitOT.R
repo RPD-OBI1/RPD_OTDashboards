@@ -66,27 +66,36 @@ LevelThrees <- hierarchy %>%
     distinct() %>%
     .$LevelThree
 
-for (i in seq(hierarchy$CostCenter)) {
-    firstlevelrender(CCName = hierarchy$CostCenter[i], 
+rmarkdown::render("Z:/Projects/dashboard/RPDOvertimeDashboard/OT_repo/RPD_OTDashboards/LongtermOTDashboard.RMD",
+                  params = list(StartDate = as.Date("2017-07-01")),
+                  output_file = "//cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/LongtermOTDashboard.html")
+
+rmarkdown::render("Z:/Projects/dashboard/RPDOvertimeDashboard/OT_repo/RPD_OTDashboards/Citywide_OTdashboard.RMD",
+                  params = list(StartDate = as.Date("2017-07-01")),
+                  output_file = "//cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/Citywide_OTdashboard.html")
+
+for (i in seq(LevelThrees)) { # Putting Level3 before Level2; so GRANTS & CHIEF get overwritten by Level2 GRANTS & CHIEF
+    thirdlevelrender(levelthreename = LevelThrees[i],
                      startingdate = as.Date("2017-07-01"),
-                     path = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/")
+                     path = "//cor.local/RPD/OBI-Analytics/OT Dashboards/ThirdLevels/")
 }
 
 for (i in seq(LevelTwos)) {
     secondlevelrender(leveltwoname = LevelTwos[i],
                       startingdate = as.Date("2017-07-01"),
-                      path = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/SecondLevels/")
+                      path = if(LevelTwos[i] %in% c("CHIEF", "GRANTS")) {
+                          "//cor.local/RPD/OBI-Analytics/OT Dashboards/ThirdLevels/"
+                      } else {
+                          "//cor.local/RPD/OBI-Analytics/OT Dashboards/SecondLevels/"
+                      }
+    )
 }
 
-for (i in seq(LevelThrees)) {
-    thirdlevelrender(levelthreename = LevelThrees[i],
+for (i in seq(hierarchy$CostCenter)) {
+    firstlevelrender(CCName = hierarchy$CostCenter[i], 
                      startingdate = as.Date("2017-07-01"),
-                     path = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/ThirdLevels/")
+                     path = "//cor.local/RPD/OBI-Analytics/OT Dashboards/FirstLevels/")
 }
-
-rmarkdown::render("Z:/Projects/dashboard/RPDOvertimeDashboard/OT_repo/RPD_OTDashboards/Citywide_OTdashboard.RMD",
-                  params = list(StartDate = as.Date("2017-07-01")),
-                  output_file = "Z:/Projects/dashboard/RPDOvertimeDashboard/Dashboards/FourthLevel/Citywide_OTdashboard.html")
 
 end <- Sys.time()
 took <- difftime(end, start)
