@@ -1,5 +1,6 @@
 ---
 title: "Overtime Dashboard, Fiscal Year-to-Date Comparisons, as of `r format(Sys.Date() - 3, '%Y/%m/%d')`"
+fontsize: 10pt
 output: 
   flexdashboard::flex_dashboard:
     logo: Z:/Projects/dashboard/RPDCrimeDashboard/Objects/RPDLogoSMALL.png
@@ -25,12 +26,12 @@ library(htmlwidgets) # to save plots as their own webpages
 # Read in data
 
 otpath <- "Z:/Projects/dashboard/RPDOvertimeDashboard/"
-savepath <- "//cor.local/RPD/OBI-Analytics/OT Dashboards/"
+savepath <- "//cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/"
 #fromdate <- as.Date("2017-07-01")
 fromdate <- params$StartDate
 todate <- Sys.Date() - 3
 
-OT <- readRDS("//cor.local/RPD/OBI/Data/overtime/Full FY OT Data/FY0304toFY1718OTdata.RDS")
+OT <- readRDS("//cor.local/RPD/Chief/OBI/Data/overtime/Full FY OT Data/FY0304toFY1718OTdata.RDS")
 
 tofiscalday <- data.frame(
     date = seq.Date(from = as.Date("2016-01-01"), 
@@ -85,7 +86,7 @@ Overview - Dollars
 Column {data-width=500}
 -----------------------------------------------------------------------
 
-### [Overall money spent](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ActivityPlotDollars.html)
+### [Overall money spent](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ActivityPlotDollars.html)
 
 ```{r}
 
@@ -135,12 +136,12 @@ activityPlot
 ```
 
 
-### [Projection](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ProjectionDollars.html)
+### [Projection](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ProjectionDollars.html)
 
 ```{r}
 
-prop.vals <- read.csv("//cor.local/RPD/OBI/Data/overtime/CashPropVals.csv", header = T)
-prop.vals.nc <- read.csv("//cor.local/RPD/OBI/Data/overtime/CashPropValsNONCUMULATIVE.csv", header = T)
+prop.vals <- read.csv("//cor.local/RPD/Chief/OBI/Data/overtime/CashPropVals.csv", header = T)
+prop.vals.nc <- read.csv("//cor.local/RPD/Chief/OBI/Data/overtime/CashPropValsNONCUMULATIVE.csv", header = T)
 
 curr.year <- 2017
 
@@ -314,7 +315,7 @@ htmlwidgets::saveWidget(blerp, paste0(savepath, "Citywide/ComponentGraphs/Projec
 Column {data-width=350}
 -----------------------------------------------------------------------
 
-### [Significant changes from FY 16-17 with "PersonnelShortage"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesPersonnelShortageDollars.html)
+### [Significant changes from FY 16-17 with "PersonnelShortage"](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesPersonnelShortageDollars.html)
 
 ```{r}
 
@@ -376,7 +377,7 @@ persplot
 
 ```
 
-### [Significant changes from FY 16-17 with "CompletingAssignment"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCompletingAssignmentDollars.html)
+### [Significant changes from FY 16-17 with "CompletingAssignment"](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCompletingAssignmentDollars.html)
 
 ```{r}
 
@@ -438,7 +439,7 @@ completingplot
 
 ```
 
-### [Significant changes from FY 16-17 with "CallBack"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCallBackDollars.html)
+### [Significant changes from FY 16-17 with "CallBack"](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCallBackDollars.html)
 
 ```{r}
 
@@ -500,7 +501,7 @@ callbackplot
 
 ```
 
-### [Significant changes from FY 16-17 with "Project"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesProjectDollars.html)
+### [Significant changes from FY 16-17 with "Project"](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesProjectDollars.html)
 
 ```{r}
 #since switch to sections
@@ -571,7 +572,7 @@ projectplot
 Column {data-width=500}
 -----------------------------------------------------------------------
 
-### [Overall money spent by Pay Period](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TimeByPayPeriodDollars.html)
+### [Overall money spent by Pay Period](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TimeByPayPeriodDollars.html)
 
 ```{r}
 
@@ -641,7 +642,7 @@ timePlot
 
 ```
 
-### [Top Project Codes](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TopProjectCodesDollars.html)
+### [Top Project Codes](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TopProjectCodesDollars.html)
 
 ```{r}
 
@@ -705,7 +706,7 @@ Overview - Hours
 Column {data-width=500}
 -----------------------------------------------------------------------
 
-### [Hours Worked by Fiscal Year & Activity](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ActivityPlotHours.html)
+### [Hours Worked by Fiscal Year & Activity](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/ActivityPlotHours.html)
 
 ```{r}
 
@@ -754,12 +755,12 @@ activityPlot
 
 ```
 
-### [Projection](file://cor.local/RPD/OBI-Analytics/OT Dashboards/CityWide/ComponentGraphs/ProjectionInHours.html)
+### [Projection](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/CityWide/ComponentGraphs/ProjectionInHours.html)
 
 ```{r eval}
 
-prop.vals.hour <- read.csv("//cor.local/RPD/OBI/Data/overtime/HourPropVals.csv", header = T)
-prop.vals.nc.hour <- read.csv("//cor.local/RPD/OBI/Data/overtime/HourPropValsNONCUMULATIVE.csv", header = T)
+prop.vals.hour <- read.csv("//cor.local/RPD/Chief/OBI/Data/overtime/HourPropVals.csv", header = T)
+prop.vals.nc.hour <- read.csv("//cor.local/RPD/Chief/OBI/Data/overtime/HourPropValsNONCUMULATIVE.csv", header = T)
 
 hour <- OT %>%
     filter(ProjectCodeFactor != "Zero Tolerance", FiscalYear %in% 2013:curr.year, Type == "Cash") %>%
@@ -940,7 +941,7 @@ herp
 Column {data-width=350}
 -----------------------------------------------------------------------
 
-### [Significant changes from FY 16-17 with "PersonnelShortage"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesPersonnelShortageHours.html)
+### [Significant changes from FY 16-17 with "PersonnelShortage"](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesPersonnelShortageHours.html)
 
 ```{r}
 
@@ -1001,7 +1002,7 @@ PersonnelShortagehoursplot
 
 ```
 
-### [Significant changes from FY 16-17 with "CompletingAssignment"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCompletingAssignmentHours.html)
+### [Significant changes from FY 16-17 with "CompletingAssignment"](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCompletingAssignmentHours.html)
 
 ```{r}
 
@@ -1062,7 +1063,7 @@ CompletingAssignmenthoursplot
 
 ```
 
-### [Significant changes from FY 16-17 with "CallBack"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCallBackHours.html)
+### [Significant changes from FY 16-17 with "CallBack"](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesCallBackHours.html)
 
 ```{r}
 
@@ -1123,7 +1124,7 @@ CallBackhoursplot
 
 ```
 
-### [Significant changes from FY 16-17 with "Project"](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesProjectHours.html)
+### [Significant changes from FY 16-17 with "Project"](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/SigChangesProjectHours.html)
 
 ```{r}
 
@@ -1187,7 +1188,7 @@ projecthoursplot
 Column {date-width=500}
 -----------------------------------------------------------------------
 
-### [Overall Hours Worked by Pay Period](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/HoursWorkedByPayPeriod.html)
+### [Overall Hours Worked by Pay Period](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/HoursWorkedByPayPeriod.html)
 
 ```{r}
 
@@ -1249,7 +1250,7 @@ timePlot
 
 ```
 
-### [Top Project Codes](file://cor.local/RPD/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TopProjectCodesByHours.html)
+### [Top Project Codes](file://cor.local/RPD/Shared/OBI-Analytics/OT Dashboards/Citywide/ComponentGraphs/TopProjectCodesByHours.html)
 
 ```{r}
 
